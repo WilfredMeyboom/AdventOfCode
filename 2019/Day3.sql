@@ -5,8 +5,11 @@ SET NOCOUNT ON
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input3.txt'
+FROM 'C:\Source\AdventOfCode\2019\input3.txt'
 WITH (ROWTERMINATOR = '0x0A');
+
+UPDATE #Input
+SET nr = LEFT(nr, LEN(nr)-1)
 
 SELECT * FROM #Input
 
@@ -126,3 +129,6 @@ DROP TABLE #Input
 DROP TABLE #Wires
 DROP TABLE #Points
 
+--2180 is correct for part 1
+
+--112316 is correct for part 2

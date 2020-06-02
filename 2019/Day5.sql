@@ -5,8 +5,11 @@ SET NOCOUNT ON
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input5.txt'
+FROM 'C:\Source\AdventOfCode\2019\input5.txt'
 WITH (ROWTERMINATOR = '0x0A');
+
+UPDATE #Input
+SET nr = LEFT(nr, LEN(nr)-1)
 
 --SELECT * FROM #Input
 

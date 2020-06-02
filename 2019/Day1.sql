@@ -3,11 +3,15 @@ use Test_WME
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input1.txt'
+FROM 'C:\Source\AdventOfCode\2019\input1.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 
 SELECT * FROM #Input
+
+UPDATE #Input
+SET nr = LEFT(nr, LEN(nr)-1)
+
 SELECT SUM( Nr/3 -2 ) FROM #Input
 
 -- 3362507 for part 1
