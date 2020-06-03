@@ -3,7 +3,7 @@ use Test_WME
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input6.txt'
+FROM 'C:\Source\AdventOfCode\2019\input6.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 

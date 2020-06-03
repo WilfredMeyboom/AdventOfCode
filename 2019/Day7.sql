@@ -1,7 +1,7 @@
 use Test_WME
 GO
 
-CREATE PROCEDURE IntCodeComp (@Input Int, @Phase Int) AS 
+CREATE OR ALTER PROCEDURE IntCodeComp (@Input Int, @Phase Int) AS 
 BEGIN
 
     SET NOCOUNT ON
@@ -9,9 +9,10 @@ BEGIN
     CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
     BULK INSERT #Input
-    FROM 'C:\Source\AdventOfCode\input7.txt'
+    FROM 'C:\Source\AdventOfCode\2019\input7.txt'
     WITH (ROWTERMINATOR = '0x0A');
 
+    UPDATE #Input SET Nr = LEFT(Nr, LEN(Nr)-1)
 
     CREATE TABLE #OpCodes (Ind INT, Val INT)
 
