@@ -3,7 +3,7 @@ use Test_WME
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input8.txt'
+FROM 'C:\Source\AdventOfCode\2019\input8.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 CREATE TABLE ##Pixels (ID INT IDENTITY(1,1), x INT, y INT, Layer INT, Val INT)
@@ -85,4 +85,5 @@ END
 
 PRINT 'XXXXXXXXXXXXXXXXXXXXXXXXXXX'
 
-
+DROP TABLE ##Image
+DROP TABLE ##Pixels
