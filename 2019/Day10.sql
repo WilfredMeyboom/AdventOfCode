@@ -3,7 +3,7 @@ use Test_WME
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input10.txt'
+FROM 'C:\Source\AdventOfCode\2019\input10.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 CREATE TABLE ##Asteroids (ID INT IDENTITY(1,1), x INT, y INT, Val CHAR)
