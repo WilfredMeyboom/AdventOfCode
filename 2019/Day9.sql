@@ -111,19 +111,19 @@ BEGIN
         IF @ParamMode3 = 2 SET @3rdNr = @3rdNr + @RelativeBase
         --@ParamMode3 should never be 1
 
-        PRINT ISNULL(
-            'Opcodecomp: ' + CAST(@OpCodeCompNr AS VARCHAR(3)) + 
-            ' Pointer: ' + CAST(@Pointer AS VARCHAR(5)) + 
-            ' ParamInstr: ' + CAST(@ParameterInstr AS VARCHAR(10)) + 
-            ' Instr: ' + CAST(@Instr AS VARCHAR(2)) + 
-            ' 1stNr: ' + ISNULL(CAST(@1stNr AS VARCHAR(500)), '-') + 
-            ' 2ndNr: ' + ISNULL(CAST(@2ndNr AS VARCHAR(500)), '-') + 
-            ' 3rdNr: ' + ISNULL(CAST(@3rdNr AS VARCHAR(500)), '-') + 
-            ' ParamMode1: ' + ISNULL(CAST(@ParamMode1 AS VARCHAR(1)), '-') + 
-            ' ParamMode2: ' + ISNULL(CAST(@ParamMode2 AS VARCHAR(1)), '-') +
-            ' ParamMode3: ' + ISNULL(CAST(@ParamMode3 AS VARCHAR(1)), '-') +
-            ' RelativeBase: ' + CAST(@RelativeBase AS VARCHAR(6))
-            , 'Log fail')
+        --PRINT ISNULL(
+        --    'Opcodecomp: ' + CAST(@OpCodeCompNr AS VARCHAR(3)) + 
+        --    ' Pointer: ' + CAST(@Pointer AS VARCHAR(5)) + 
+        --    ' ParamInstr: ' + CAST(@ParameterInstr AS VARCHAR(10)) + 
+        --    ' Instr: ' + CAST(@Instr AS VARCHAR(2)) + 
+        --    ' 1stNr: ' + ISNULL(CAST(@1stNr AS VARCHAR(500)), '-') + 
+        --    ' 2ndNr: ' + ISNULL(CAST(@2ndNr AS VARCHAR(500)), '-') + 
+        --    ' 3rdNr: ' + ISNULL(CAST(@3rdNr AS VARCHAR(500)), '-') + 
+        --    ' ParamMode1: ' + ISNULL(CAST(@ParamMode1 AS VARCHAR(1)), '-') + 
+        --    ' ParamMode2: ' + ISNULL(CAST(@ParamMode2 AS VARCHAR(1)), '-') +
+        --    ' ParamMode3: ' + ISNULL(CAST(@ParamMode3 AS VARCHAR(1)), '-') +
+        --    ' RelativeBase: ' + CAST(@RelativeBase AS VARCHAR(6))
+        --    , 'Log fail')
 
         --SELECT @ParameterInstr AS [PI], @Pointer AS P, @RelativeBase AS RB, * FROM OpCodes ORDER BY Ind
 
