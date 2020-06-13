@@ -21,16 +21,14 @@ INSERT ##Moons (x, y, z, vx, vy, vz) VALUES
 (-2, 10, -8, 0, 0, 0)
 
 --For part 2
-CREATE TABLE ##EnergyState (Steps BIGINT, Energy BIGINT)
-
 
 DECLARE @Counter INT = 0
 
-WHILE @Counter < 100000--1000
+WHILE @Counter < 1000000--1000
 BEGIN
 
     ;WITH cte_speedChanges AS (
-        SELECT S.ID, --S.x, S.y, S.z, 
+        SELECT S.ID,
         SUM(CASE WHEN S.x < T.x THEN 1 WHEN S.x > T.x THEN -1 ELSE 0 END) AS vx,
         SUM(CASE WHEN S.y < T.y THEN 1 WHEN S.y > T.y THEN -1 ELSE 0 END) AS vy,
         SUM(CASE WHEN S.z < T.z THEN 1 WHEN S.z > T.z THEN -1 ELSE 0 END) AS vz
@@ -49,15 +47,6 @@ BEGIN
     SET x = x + vx,
         y = y + vy,
         z = z + vz
-
-    --For part 2
-    ;WITH cte_EnergyPerPlanet AS (
-        SELECT (ABS(x) + ABS(y) + ABS(z)) * (ABS(vx) + ABS(vy) + ABS(vz)) AS Energy
-        FROM ##Moons
-    )
-    INSERT ##EnergyState (Steps, Energy)
-    SELECT @Counter, SUM(Energy)
-    FROM cte_EnergyPerPlanet
   
     INSERT ##MoonsHistory
     SELECT *, @Counter FROM ##Moons
@@ -66,46 +55,69 @@ BEGIN
 
 END
 
-/* For part 1
-SELECT * FROM ##Moons
+-- For part 1
 
 ;WITH cte_EnergyPerPlanet AS (
     SELECT (ABS(x) + ABS(y) + ABS(z)) * (ABS(vx) + ABS(vy) + ABS(vz)) AS Energy
-    FROM ##Moons
+    FROM ##MoonsHistory
+    WHERE steps = 999
 )
 SELECT SUM(Energy)
 FROM cte_EnergyPerPlanet
-*/
 
---DROP TABLE ##EnergyState
+
 DROP TABLE ##Moons
 
 --10189 Is correct for part 1
 
+--INSERT [dbo].[Day12_MoonsHistory] (ID , x , y , z , vx , vy , vz , steps)
+--SELECT ID , x , y , z , vx , vy , vz , steps FROM ##MoonsHistory
 
 
---SELECT DISTINCT M1.ID, M1.x, M1.Steps
---FROM ##MoonsHistory M1
---WHERE M1.ID = 1
---ORDER BY M1.Steps
-
-;WITH cte_FocusMoon AS (
-    SELECT M1.steps, M1.x, M1.vx, MIN(M2.steps - M1.steps) AS MinSteps
-    FROM ##MoonsHistory M1
-    INNER JOIN ##MoonsHistory M2 ON M1.x = M2.x AND M1.vx = M2.vx
-                                AND M1.ID = M2.ID
-                                AND M1.steps < M2.steps
-    WHERE M1.ID = 1
-    GROUP BY M1.steps, M1.x, M1.vx
+;WITH cte_Max AS (
+    SELECT ID, MAX(x*x + vx*vx) AS MaxXVX
+    FROM Day12_MoonsHistory
+    GROUP BY ID
 )
-SELECT *
-FROM ##MoonsHistory M1
-INNER JOIN ##MoonsHistory M2 ON M1.x = M2.x AND M1.vx = M2.vx
-                            AND M1.ID = M2.ID
-                            AND M1.steps < M2.steps
-INNER JOIN cte_FocusMoon cFM ON cFM.steps = M1.steps
-                            AND cFM.MinSteps = (M2.steps - M1.steps)
-WHERE M1.ID = 1 
-ORDER BY M1.steps
+SELECT T1.ID, T1.x, T1.vx, T1.steps, T1.steps - LAG(T1.steps, 1, 0) OVER (ORDER BY T1.ID, T1.steps)
+FROM Day12_MoonsHistory T1
+INNER JOIN cte_Max T2 ON T1.ID = T2.ID AND (T1.x * T1.x + T1.vx * T1.vx) = T2.MaxXVX
+ORDER BY 1,2,3,4
+
+
+;WITH cte_Max AS (
+    SELECT ID, MAX(y*y + vy*vy) AS MaxyVy
+    FROM Day12_MoonsHistory
+    GROUP BY ID
+)
+SELECT T1.ID, T1.y, T1.vy, T1.steps, T1.steps - LAG(T1.steps, 1, 0) OVER (ORDER BY T1.ID, T1.steps)
+FROM Day12_MoonsHistory T1
+INNER JOIN cte_Max T2 ON T1.ID = T2.ID AND (T1.y * T1.y + T1.vy * T1.vy) = T2.MaxyVy
+ORDER BY 1,2,3,4
+
+
+;WITH cte_Max AS (
+    SELECT ID, MAX(z*z + vz*vz) AS MaxzVz
+    FROM Day12_MoonsHistory
+    GROUP BY ID
+)
+SELECT T1.ID, T1.z, T1.vz, T1.steps, T1.steps - LAG(T1.steps, 1, 0) OVER (ORDER BY T1.ID, T1.steps)
+FROM Day12_MoonsHistory T1
+INNER JOIN cte_Max T2 ON T1.ID = T2.ID AND (T1.z * T1.z + T1.vz * T1.vz) = T2.MaxzVz
+ORDER BY 1,2,3,4
+
+
+--84032
+--231614
+--193052
+
+
+---- DROP TABLE ##MoonsHistory
+
+SELECT CAST(84032 AS BIGINT) * CAST(231614 AS BIGINT) * CAST(193052 AS BIGINT)
+
+--https://www.calculatorsoup.com/calculators/math/lcm.php
+--Calculate LCM (Least common multiple
+--469671086427712 is correct for part 2
 
 

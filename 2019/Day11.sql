@@ -2,7 +2,6 @@ USE Test_WME
 GO
 
 SET NOCOUNT ON
-SET NOCOUNT ON
 
 DECLARE @ProgramFile VARCHAR(250) = 'C:\Source\AdventOfCode\2019\input11.txt'
 
