@@ -5,8 +5,10 @@ SET NOCOUNT ON
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input14.txt'
+FROM 'C:\Source\AdventOfCode\2019\input14.txt'
 WITH (ROWTERMINATOR = '0x0A');
+
+UPDATE #Input SET Nr = LEFT(Nr, LEN(Nr)-1)
 
 CREATE TABLE ##Conversions (ID BIGINT IDENTITY(1,1), ConvNr BIGINT, IsNeededAmount BIGINT, IsNeededChem VARCHAR(10), IsCreatedAmount BIGINT, IsCreatedChem VARCHAR(10))
 
@@ -37,6 +39,7 @@ SELECT ConvNr
 FROM cte_Conversions
 ORDER BY 1
 
+
 DROP TABLE #Input
 
 --SELECT * FROM ##Conversions
@@ -45,8 +48,9 @@ CREATE TABLE ##RequiredChems (ID BIGINT IDENTITY(1,1), ReqAmount BIGINT, ReqChem
 CREATE TABLE ##RequiredChemsTemp (ID BIGINT IDENTITY(1,1), ReqAmount BIGINT, ReqChem VARCHAR(10))
 CREATE TABLE ##LeftOverChems (ID BIGINT IDENTITY(1,1), LOAmount BIGINT, LOChem VARCHAR(10))
 
-INSERT ##RequiredChems (ReqAmount, ReqChem) VALUES (998536, 'FUEL')
---INSERT ##RequiredChems (ReqAmount, ReqChem) VALUES (1, 'MPGLV')
+--INSERT ##RequiredChems (ReqAmount, ReqChem) VALUES (1, 'FUEL') -- Input for part 1
+INSERT ##RequiredChems (ReqAmount, ReqChem) VALUES (998536, 'FUEL') --Trail and error input for part 2  ->  999999548174
+--INSERT ##RequiredChems (ReqAmount, ReqChem) VALUES (998537, 'FUEL') --Trail and error input for part 2  ->  1000001872527
 
 DECLARE @LOAmount BIGINT
 DECLARE @LOAmountCorr BIGINT
@@ -129,6 +133,7 @@ END
 --SELECT * FROM ##RequiredChems
 
 SELECT SUM(ReqAmount) FROM ##RequiredChems
+--SELECT * FROM ##Conversions
 
 --202226 is too low
 --1882238 is too low
@@ -144,3 +149,5 @@ DROP TABLE ##Conversions
 -- 901318582284 -  900000
 --1001465098472 - 1000000
 --1000000000000 
+
+-- 998536 is correct for part 2
