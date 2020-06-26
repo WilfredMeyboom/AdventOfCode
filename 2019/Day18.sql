@@ -5,9 +5,11 @@ SET NOCOUNT ON
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input18.txt'
+FROM 'C:\Source\AdventOfCode\2019\input18.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
+
+--Create and fill the Grid table which is a map of the input
 CREATE TABLE ##Grid (ID INT IDENTITY(1,1), x INT, y INT, val CHAR, UNIQUE(x,y))
 
 ;WITH cte_Grid AS (
@@ -34,6 +36,7 @@ DROP TABLE #Input
 
 --SELECT * FROM ##Grid WHERE val = '@'
 
+ -- Create a keys table in which we're going to store the shortest distance between every key and which doors and other keys are on that path
 CREATE TABLE ##Keys (ID INT IDENTITY(1,1), startLetter CHAR, x INT, y INT, endLetter CHAR, Dist INT, DoorsEncountered VARCHAR(26), OtherKeyEncountered VARCHAR(26))
 
 ;WITH cte_Keys AS (
@@ -119,6 +122,7 @@ END
 CLOSE KeyCursor
 DEALLOCATE KeyCursor
 
+--Temp table we don't need anymore
 DROP TABLE ##Route
 
 
@@ -129,12 +133,14 @@ DROP TABLE ##Keys
 
 */
 
+--Because creating and filling the keys table takes quite some time (approx. 150 min), we create a physical copy
 --SELECT * 
 --INTO Day18_Keys
 --FROM ##Keys
 
 SELECT * FROM Day18_Keys
 
+--Remove the last key found because we already have this info in the endletter column
 --UPDATE Day18_Keys
 --SET OtherKeyEncountered = SUBSTRING(OtherKeyEncountered, 1, LEN(OtherKeyEncountered) -1)
 
@@ -142,7 +148,7 @@ SELECT * FROM Day18_Keys
 --26	@whcrqgofaltkvsjmuzbipyndxe	4402
 
 /*
-Analysis shows:
+Manual analysis shows this order to be best:
 
 w
 f
@@ -173,7 +179,7 @@ e
 
 */
 
-
+-- Get a list of the distances
 SELECT 1 AS SeqNr , * FROM Day18_Keys WHERE startLetter='@' AND endLetter = 'w' UNION
 SELECT 2 AS SeqNr , * FROM Day18_Keys WHERE startLetter='w' AND endLetter = 'f' UNION
 SELECT 3 AS SeqNr , * FROM Day18_Keys WHERE startLetter='f' AND endLetter = 'r' UNION
@@ -201,6 +207,7 @@ SELECT 24 AS SeqNr , * FROM Day18_Keys WHERE startLetter='n' AND endLetter = 'd'
 SELECT 25 AS SeqNr , * FROM Day18_Keys WHERE startLetter='d' AND endLetter = 'x' UNION
 SELECT 26 AS SeqNr , * FROM Day18_Keys WHERE startLetter='x' AND endLetter = 'e' 
 ORDER BY SeqNr
+-- Adding the distances gives 3546
 
 --7622 is too high for part 1
 --7162 is too high for part 1
@@ -209,7 +216,7 @@ ORDER BY SeqNr
 --3950 is incorrect for part 1
 --3872 is incorrect for part 1
 --3870 is incorrect for part 1
-
+--3546 is correct for part 1
 
 /*
 
@@ -220,13 +227,13 @@ DROP TABLE ##Seq
 */
 
 --('o','g','l','t','k','r','q','v')
-SELECT * FROM Day18_Keys WHERE startLetter = 'k' AND endletter IN ('v') ORDER BY Dist
+--SELECT * FROM Day18_Keys WHERE startLetter = 'k' AND endletter IN ('v') ORDER BY Dist
 
 --c - r - q - g - o - l - t - k - v
 --SELECT 132+74+182+134+222+14+156+398 == 1312
 
 
-
+--Manual analysis shows this order to be best:
 SELECT 1 AS SeqNr , * FROM Day18_Keys WHERE startLetter='@' AND endLetter = 'q' UNION	
 SELECT 2 AS SeqNr , * FROM Day18_Keys WHERE startLetter='q' AND endLetter = 'r' UNION	
 SELECT 3 AS SeqNr , * FROM Day18_Keys WHERE startLetter='r' AND endLetter = 'w' UNION	
@@ -255,115 +262,15 @@ SELECT 25 AS SeqNr , * FROM Day18_Keys WHERE startLetter='d' AND endLetter = 'x'
 SELECT 26 AS SeqNr , * FROM Day18_Keys WHERE startLetter='x' AND endLetter = 'e' 
 ORDER BY SeqNr
 
+-- Adding all distances gives 1996
+-- Correct this value for not starting in the center but two spaces from the center (4x) -->
+SELECT 1996 - 4 * 2
+
 --2766 is too high for part 2
 --2192 it too high for part 2
 --2012 it too high for part 2
+-- 1988 is correct for part 2
+
+--SELECT * FROM Day18_Keys WHERE startLetter = '@'
 
 
-SELECT * FROM Day18_Keys WHERE startLetter = '@'
-
-
-
-/*
-
-SELECT DISTINCT startLetter
-, CASE WHEN x<41 AND y<41 THEN 'NW'
-       WHEN x>41 AND y<41 THEN 'NE'
-       WHEN x<41 AND y>41 THEN 'SW'
-       WHEN x>41 AND y>41 THEN 'SE' END AS Kwadrant
-FROM Day18_Keys
-ORDER BY 2,1
-
-SELECT * FROM Day18_Keys WHERE startLetter = 'e' --AND DoorsEncountered = ''
-
-SELECT * FROM Day18_Keys WHERE startLetter IN ('u','z','g','l','t','k') AND endLetter IN ('u','z','g','l','t','k')
-
-;WITH cte_Letters AS (
-    SELECT 'w' AS Letter
-    UNION SELECT 'f'
-    UNION SELECT 'r'
-    UNION SELECT 'q'
-)
-SELECT L1.Letter, L2.Letter, L3.Letter, L4.Letter, S1.Dist, S2.Dist, S3.Dist, S4.Dist, S1.Dist+  S2.Dist + S3.Dist + S4.Dist
-FROM cte_Letters L1
-INNER JOIN cte_Letters L2 ON L1.Letter <> L2.Letter
-INNER JOIN cte_Letters L3 ON L1.Letter <> L3.Letter AND L2.Letter <> L3.Letter
-INNER JOIN cte_Letters L4 ON L1.Letter <> L4.Letter AND L2.Letter <> L4.Letter AND L3.Letter <> L4.Letter
-INNER JOIN Day18_Keys S1 ON S1.startLetter = '@' AND S1.endLetter = L1.Letter
-INNER JOIN Day18_Keys S2 ON S2.startLetter = L1.Letter AND S2.endLetter = L2.Letter
-INNER JOIN Day18_Keys S3 ON S3.startLetter = L2.Letter AND S3.endLetter = L3.Letter
-INNER JOIN Day18_Keys S4 ON S4.startLetter = L3.Letter AND S4.endLetter = L4.Letter
-ORDER BY 9
-
-
-
-;WITH cte_Letters AS (
-    SELECT 'u' AS Letter
-    UNION SELECT 'z'
-    UNION SELECT 'g'
-    UNION SELECT 'l'
-    UNION SELECT 't'
-    UNION SELECT 'k'
-)
-SELECT L1.Letter, L2.Letter, L3.Letter, L4.Letter, L5.Letter, L6.Letter, S0.Dist + S1.Dist+  S2.Dist + S3.Dist + S4.Dist + S5.Dist 
-FROM cte_Letters L1
-INNER JOIN cte_Letters L2 ON L1.Letter <> L2.Letter
-INNER JOIN cte_Letters L3 ON L1.Letter <> L3.Letter AND L2.Letter <> L3.Letter
-INNER JOIN cte_Letters L4 ON L1.Letter <> L4.Letter AND L2.Letter <> L4.Letter AND L3.Letter <> L4.Letter
-INNER JOIN cte_Letters L5 ON L1.Letter <> L5.Letter AND L2.Letter <> L5.Letter AND L3.Letter <> L5.Letter AND L4.Letter <> L5.Letter 
-INNER JOIN cte_Letters L6 ON L1.Letter <> L6.Letter AND L2.Letter <> L6.Letter AND L3.Letter <> L6.Letter AND L4.Letter <> L6.Letter AND L5.Letter <> L6.Letter
-INNER JOIN Day18_Keys S0 ON S0.startLetter = '@' AND S0.endLetter = L1.Letter
-INNER JOIN Day18_Keys S1 ON S1.startLetter = L1.Letter AND S1.endLetter = L2.Letter
-INNER JOIN Day18_Keys S2 ON S2.startLetter = L2.Letter AND S2.endLetter = L3.Letter
-INNER JOIN Day18_Keys S3 ON S3.startLetter = L3.Letter AND S3.endLetter = L4.Letter
-INNER JOIN Day18_Keys S4 ON S4.startLetter = L4.Letter AND S4.endLetter = L5.Letter
-INNER JOIN Day18_Keys S5 ON S5.startLetter = L5.Letter AND S5.endLetter = L6.Letter
-ORDER BY 7
-
-
-
-;WITH cte_Letters AS (
-    SELECT 'h' AS Letter
-    UNION SELECT 'a'
-    UNION SELECT 'c'
-    UNION SELECT 'b'
-)
-SELECT L1.Letter, L2.Letter, L3.Letter, L4.Letter, S1.Dist, S2.Dist, S3.Dist, S4.Dist, S1.Dist+  S2.Dist + S3.Dist + S4.Dist
-FROM cte_Letters L1
-INNER JOIN cte_Letters L2 ON L1.Letter <> L2.Letter
-INNER JOIN cte_Letters L3 ON L1.Letter <> L3.Letter AND L2.Letter <> L3.Letter
-INNER JOIN cte_Letters L4 ON L1.Letter <> L4.Letter AND L2.Letter <> L4.Letter AND L3.Letter <> L4.Letter
-INNER JOIN Day18_Keys S1 ON S1.startLetter = '@' AND S1.endLetter = L1.Letter
-INNER JOIN Day18_Keys S2 ON S2.startLetter = L1.Letter AND S2.endLetter = L2.Letter
-INNER JOIN Day18_Keys S3 ON S3.startLetter = L2.Letter AND S3.endLetter = L3.Letter
-INNER JOIN Day18_Keys S4 ON S4.startLetter = L3.Letter AND S4.endLetter = L4.Letter
-ORDER BY 9
-
-
-
-
-;WITH cte_Letters AS (
-    SELECT 'w' AS Letter
-    UNION SELECT 'f'
-    UNION SELECT 'r'
-    UNION SELECT 'q'
-    UNION SELECT 'j'
-    UNION SELECT 'm'
-)
-SELECT L1.Letter, L2.Letter, L3.Letter, L4.Letter, L5.Letter, L6.Letter, S0.Dist + S1.Dist+  S2.Dist + S3.Dist + S4.Dist + S5.Dist 
-FROM cte_Letters L1
-INNER JOIN cte_Letters L2 ON L1.Letter <> L2.Letter
-INNER JOIN cte_Letters L3 ON L1.Letter <> L3.Letter AND L2.Letter <> L3.Letter
-INNER JOIN cte_Letters L4 ON L1.Letter <> L4.Letter AND L2.Letter <> L4.Letter AND L3.Letter <> L4.Letter
-INNER JOIN cte_Letters L5 ON L1.Letter <> L5.Letter AND L2.Letter <> L5.Letter AND L3.Letter <> L5.Letter AND L4.Letter <> L5.Letter 
-INNER JOIN cte_Letters L6 ON L1.Letter <> L6.Letter AND L2.Letter <> L6.Letter AND L3.Letter <> L6.Letter AND L4.Letter <> L6.Letter AND L5.Letter <> L6.Letter
-INNER JOIN Day18_Keys S0 ON S0.startLetter = '@' AND S0.endLetter = L1.Letter
-INNER JOIN Day18_Keys S1 ON S1.startLetter = L1.Letter AND S1.endLetter = L2.Letter
-INNER JOIN Day18_Keys S2 ON S2.startLetter = L2.Letter AND S2.endLetter = L3.Letter
-INNER JOIN Day18_Keys S3 ON S3.startLetter = L3.Letter AND S3.endLetter = L4.Letter
-INNER JOIN Day18_Keys S4 ON S4.startLetter = L4.Letter AND S4.endLetter = L5.Letter
-INNER JOIN Day18_Keys S5 ON S5.startLetter = L5.Letter AND S5.endLetter = L6.Letter
-ORDER BY 7
-
-
-*/

@@ -1,48 +1,39 @@
+-- Advent of Code header als je de IntComp nodig hebt
+
 USE Test_WME
 GO
 
 SET NOCOUNT ON
 
-CREATE TABLE ##OpCodes (Ind BIGINT, Val BIGINT, Phase BIGINT)
-CREATE TABLE ##Pointers (Phase BIGINT, Pointer BIGINT)
+DECLARE @ProgramFile VARCHAR(250) = 'C:\Source\AdventOfCode\2019\input17.txt'
+
+CREATE TABLE ##Pointers (OpCodeCompNr BIGINT, Pointer BIGINT, RelativeBase BIGINT)
 
 DECLARE @Output BIGINT = 0
-DECLARE @Phase BIGINT = 1
 
-INSERT ##Pointers (Phase, Pointer) VALUES (@Phase,0), (-@Phase,0)
+INSERT ##Pointers (OpCodeCompNr, Pointer, RelativeBase) VALUES (0, 0, 0)
 
-CREATE TABLE #Input (Nr NVARCHAR(MAX));
+-- PROCEDURE [dbo].[IntCodeComp] (@ProgramFile VARCHAR(250)
+--								, @OpCodeCompNr INT
+--								, @Input BIGINT
+--								, @Output BIGINT OUTPUT)
 
-BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input17.txt'
-WITH (ROWTERMINATOR = '0x0A');
+------------------- IntComp loaded
 
-;WITH cte_Values AS (
-    SELECT 0 AS Ind
-    ,      SUBSTRING(Nr, 1, CHARINDEX(',', Nr) - 1) AS Val
-    ,      SUBSTRING(Nr, CHARINDEX(',', Nr) + 1, LEN(Nr)) + ',' AS Rest
-    FROM #Input
-    UNION ALL
-    SELECT Ind + 1
-    ,      SUBSTRING(Rest, 1, CHARINDEX(',', Rest) - 1) AS Val
-    ,      SUBSTRING(Rest, CHARINDEX(',', Rest) + 1, LEN(Rest)) AS Rest
-    FROM cte_Values
-    WHERE LEN(Rest) > 0
-)
-INSERT ##OpCodes (Ind, Val, Phase)
-SELECT Ind, Val, @Phase
-FROM cte_Values OPTION (MAXRECURSION 10000)
 
-DROP TABLE #Input
+DECLARE @SkipPart1 INT = 1
+
+IF @SkipPart1 = 0
+BEGIN
 
 CREATE TABLE ##Grid (ID INT IDENTITY(1,1), x INT, y INT, Val INT)
 DECLARE @x INT = 0
 DECLARE @y INT = 0
 
-WHILE @Output <> -99 
+WHILE @Output <> 99 
 BEGIN    
 
-    EXEC IntCodeComp 0, @Phase, @Output OUTPUT
+    EXEC IntCodeComp @ProgramFile, 0, 0 /*input*/, @Output OUTPUT
 
     PRINT 'Output: ' + CAST(@Output AS VARCHAR(4))
 
@@ -60,7 +51,7 @@ END
 --SELECT * FROM ##Pointers
 --SELECT * FROM ##OpCodes
 
-DROP TABLE ##Opcodes
+DROP TABLE Opcodes
 DROP TABLE ##Pointers
 
 SELECT * FROM ##Grid WHERE x = 12 AND y = 16
@@ -109,6 +100,13 @@ BEGIN
 
 END
 
+END -- End of part 1
+ELSE
+BEGIN -- Start part 2
+
+SET @ProgramFile = 'C:\Source\AdventOfCode\2019\input17_Part2.txt'
+
+
 /*
 L 12,L 6,L 8,R 6,L 8,L 8,R 4,R 6,R 6,L 12,L 6,L 8,R 6,L 8,L 8,R 4,R 6,R 6,L 12,R 6,L 8,L 12,R 6,L 8,L 8,L 8,R 4,R 6,R 6,L 12,L 6,L 8,R 6,L 8,L 8,R 4,R 6,R 6,L 12,R 6,L 8
 <C>,<A>,<C>,<A>,<B>,<B>,<A>,<C>,<A>,<B>
@@ -122,271 +120,311 @@ CREATE TABLE ##InputInstructions (ID INT IDENTITY(1,1), Input INT)
 INSERT ##InputInstructions (Input) VALUES (67),(44),(65),(44),(67),(44),(65),(44),(66),(44),(66),(44),(65),(44),(67),(44),(65),(44),(66),(10)
 INSERT ##InputInstructions (Input) VALUES (76),(44),(56),(44),(76),(44),(56),(44),(82),(44),(52),(44),(82),(44),(54),(44),(82),(44),(54),(10)
 INSERT ##InputInstructions (Input) VALUES (76),(44),(54),(44),(54),(44),(82),(44),(54),(44),(76),(44),(56),(10)
-INSERT ##InputInstructions (Input) VALUES (76),(44),(54),(44),(54),(44),(76),(44),(54),(76),(44),(56),(44),(82),(44),(54),(10)
+INSERT ##InputInstructions (Input) VALUES (76),(44),(54),(44),(54),(44),(76),(44),(54),(44),(76),(44),(56),(44),(82),(44),(54),(10)
 INSERT ##InputInstructions (Input) VALUES (110),(10)
+  
 
 
-SELECT * FROM ##InputInstructions
+--SELECT * FROM ##InputInstructions
 
 
-CREATE TABLE ##OpCodes (Ind BIGINT, Val BIGINT, Phase BIGINT)
-CREATE TABLE ##Pointers (Phase BIGINT, Pointer BIGINT)
-
-DECLARE @Output BIGINT = 0
-DECLARE @Phase BIGINT = 1
-
-INSERT ##Pointers (Phase, Pointer) VALUES (@Phase,0), (-@Phase,0)
-
-CREATE TABLE #Input (Nr NVARCHAR(MAX));
-
-BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input17.txt'
-WITH (ROWTERMINATOR = '0x0A');
-
-;WITH cte_Values AS (
-    SELECT 0 AS Ind
-    ,      SUBSTRING(Nr, 1, CHARINDEX(',', Nr) - 1) AS Val
-    ,      SUBSTRING(Nr, CHARINDEX(',', Nr) + 1, LEN(Nr)) + ',' AS Rest
-    FROM #Input
-    UNION ALL
-    SELECT Ind + 1
-    ,      SUBSTRING(Rest, 1, CHARINDEX(',', Rest) - 1) AS Val
-    ,      SUBSTRING(Rest, CHARINDEX(',', Rest) + 1, LEN(Rest)) AS Rest
-    FROM cte_Values
-    WHERE LEN(Rest) > 0
-)
-INSERT ##OpCodes (Ind, Val, Phase)
-SELECT Ind, Val, @Phase
-FROM cte_Values OPTION (MAXRECURSION 10000)
-
-DROP TABLE #Input
-
-UPDATE ##OpCodes SET Val = 2 WHERE Ind = 0
 
 DECLARE @Counter INT = 1
 DECLARE @Input INT
+DECLARE @ScaffoldingDone INT = 0
 
-WHILE @Output <> -99 
+--Initialize input
+SELECT @Input = Input FROM ##InputInstructions WHERE ID = @Counter
+
+WHILE @Output <> -999999 
 BEGIN    
 
-    SELECT @Input = Input FROM ##InputInstructions WHERE ID = @Counter
+    --PRINT 'Input: ' + CAST(@Input AS VARCHAR(10))
 
-    EXEC IntCodeComp @Input, @Phase, @Output OUTPUT
+    EXEC IntCodeComp @ProgramFile, 0, @Input, @Output OUTPUT
 
-    PRINT 'Output: ' + CAST(@Output AS VARCHAR(10))
 
-    IF @Output = -9999 SET @Counter = @Counter + 1
+    IF @Output = -99999 
+    BEGIN
+        SET @ScaffoldingDone = 1
+        SET @Counter = @Counter + 1
+        SELECT @Input = Input FROM ##InputInstructions WHERE ID = @Counter
+        PRINT 'Input: ' + CAST(@Input AS VARCHAR(10))
+    END
+
+    IF @ScaffoldingDone = 1
+        PRINT 'Output: ' + CAST(@Output AS VARCHAR(10))
+
 
 END
 
 
+/*
+DROP TABLE Opcodes
+DROP TABLE ##Pointers
+DROP TABLE ##InputInstructions
+*/
+
+END -- End of part 2
+
+--897344 is correct for part 2 
 
 
 /*
 USE [Test_WME]
 GO
-
+/****** Object:  StoredProcedure [dbo].[IntCodeComp]    Script Date: 2020-06-26 5:38:35 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-ALTER PROCEDURE [dbo].[IntCodeComp] (@Input BIGINT, @Phase BIGINT, @Output BIGINT OUTPUT) AS 
+ALTER   PROCEDURE [dbo].[IntCodeComp] (@ProgramFile VARCHAR(250), @OpCodeCompNr INT, @Input BIGINT, @Output BIGINT OUTPUT) AS 
 BEGIN
 
     SET NOCOUNT ON
 
-    DECLARE @FirstRun INT = 0
- 
-    DECLARE @Pointer BIGINT
-    DECLARE @Instr BIGINT
-    DECLARE @ParameterInstr VARCHAR(20)
-    DECLARE @FirstNr BIGINT
-    DECLARE @SecondNr BIGINT
-    DECLARE @ThirdNr BIGINT
-    DECLARE @DestNr BIGINT
-    DECLARE @ParamMode1 BIGINT
-    DECLARE @ParamMode2 BIGINT
-    DECLARE @ParamMode3 BIGINT
-    DECLARE @Base BIGINT
+    --Create on first call
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'OpCodes')
+        CREATE TABLE OpCodes (CompNr INT, Ind INT, Val BIGINT)
 
-    SELECT @Pointer = Pointer FROM ##Pointers WHERE Phase = @Phase
-    SELECT @Base = Pointer FROM ##Pointers WHERE Phase = -1 * @Phase
+    IF (SELECT COUNT(1) FROM OpCodes WHERE CompNr = @OpCodeCompNr) = 0
+    BEGIN
+
+        CREATE TABLE #Input (Nr NVARCHAR(MAX));
+
+        DECLARE @Sql NVARCHAR(MAX)
+
+        SET @Sql = 'BULK INSERT #Input FROM ''' + @ProgramFile + 
+            ''' WITH (ROWTERMINATOR = ''0x0A'');'
+        --PRINT @Sql
+        EXEC sp_executesql @Sql
+
+        UPDATE #Input SET Nr = LEFT(Nr, LEN(Nr)-1)
+
+        --SELECT * FROM #Input
+
+        -- Load the computer if it is a new one
+        ;WITH cte_Values AS (
+            SELECT 0 AS Ind
+            ,      SUBSTRING(Nr, 1, CHARINDEX(',', Nr) - 1) AS Val
+            ,      SUBSTRING(Nr, CHARINDEX(',', Nr) + 1, LEN(Nr)) + ',' AS Rest
+            FROM #Input
+            UNION ALL
+            SELECT Ind + 1
+            ,      SUBSTRING(Rest, 1, CHARINDEX(',', Rest) - 1) AS Val
+            ,      SUBSTRING(Rest, CHARINDEX(',', Rest) + 1, LEN(Rest)) AS Rest
+            FROM cte_Values
+            WHERE LEN(Rest) > 0
+        )
+        INSERT OpCodes (CompNr, Ind, Val)
+        SELECT @OpCodeCompNr, Ind, Val
+        FROM cte_Values OPTION (MAXRECURSION 10000)
+
+        DROP TABLE #Input
+    END
+
+
+
+    DECLARE @Pointer INT
+    DECLARE @Instr INT
+    DECLARE @ParameterInstr VARCHAR(10)
+    DECLARE @1stNr BIGINT
+    DECLARE @2ndNr BIGINT
+    DECLARE @3rdNr INT
+    
+    DECLARE @ParamMode1 INT
+    DECLARE @ParamMode2 INT
+    DECLARE @ParamMode3 INT
+    DECLARE @InputConsumed INT = 0
+    DECLARE @RelativeBase BIGINT
+    DECLARE @Debug INT = 0
+
+    --This is the input which causes the debug to switch on
+    --IF @Input = 10 SET @Debug = 1
+
+    SELECT @Pointer = Pointer 
+    ,      @RelativeBase = RelativeBase 
+    FROM ##Pointers 
+    WHERE OpCodeCompNr = @OpCodeCompNr
 
     SET @Instr = 0
 
     WHILE @Instr <> 99
     BEGIN
-    
-        SELECT @ParameterInstr = '00000' + CAST(Val AS VARCHAR(20)) FROM ##OpCodes WHERE Ind = @Pointer AND Phase = @Phase
+
+        SELECT @ParameterInstr = '00000' + CAST(Val AS VARCHAR(10)) FROM OpCodes WHERE Ind = @Pointer AND CompNr = @OpCodeCompNr
 
         SET @Instr = RIGHT(@ParameterInstr, 2)
         SET @ParamMode1 = SUBSTRING(@ParameterInstr, LEN(@parameterInstr) - 2, 1)
         SET @ParamMode2 = SUBSTRING(@ParameterInstr, LEN(@parameterInstr) - 3, 1)
         SET @ParamMode3 = SUBSTRING(@ParameterInstr, LEN(@parameterInstr) - 4, 1)
 
-        --PRINT '*** The instruction is ' + CAST(@Instr AS VARCHAR(2)) + '***'
-        
-        --PRINT 'The first parameter is in mode: ' + CAST(@ParamMode1 AS VARCHAR(1))
-
-        SELECT @FirstNr = Val FROM ##OpCodes WHERE Ind = @Pointer + 1 AND Phase = @Phase
-
-        IF @ParamMode1 = 0 
+        --Check if memory position exists (where the computer wants to write to)
+        IF @Instr IN (1, 2, 3, 7, 8, 9)
         BEGIN
-            -- If the reference is to an unknown memory address, add it with value 0
-            IF NOT EXISTS(SELECT 1 FROM ##OpCodes WHERE Ind = @FirstNr) INSERT ##OpCodes(Ind, Val, Phase) SELECT @FirstNr, 0, @Phase
-
-            SELECT @FirstNr = Val FROM ##OpCodes WHERE Ind = @FirstNr AND @Phase = Phase
+            IF @ParamMode1 = 0 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val, 0 FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr
+            IF @ParamMode1 = 2 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr) + @RelativeBase AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val + @RelativeBase, 0 FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr
         END
-        IF @ParamMode1 = 2
+        IF @Instr IN (1, 2, 7, 8)
         BEGIN
-            -- If the reference is to an unknown memory address, add it with value 0
-            IF NOT EXISTS(SELECT 1 FROM ##OpCodes WHERE Ind = @FirstNr + @Base) INSERT ##OpCodes(Ind, Val, Phase) SELECT @FirstNr + @Base, 0, @Phase
-
-            SELECT @FirstNr = Val FROM ##OpCodes WHERE Ind = @FirstNr + @Base AND @Phase = Phase
+            IF @ParamMode2 = 0 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val, 0 FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr
+            IF @ParamMode2 = 2 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr) + @RelativeBase AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val + @RelativeBase, 0 FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr
+            IF @ParamMode3 = 0 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 3 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val, 0 FROM OpCodes WHERE Ind = @Pointer + 3 AND CompNr = @OpCodeCompNr
+            IF @ParamMode3 = 2 AND NOT EXISTS(SELECT 1 FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 3 AND CompNr = @OpCodeCompNr) + @RelativeBase AND CompNr = @OpCodeCompNr) 
+                INSERT OpCodes (CompNr, Ind, Val) SELECT @OpCodeCompNr, Val + @RelativeBase, 0 FROM OpCodes WHERE Ind = @Pointer + 3 AND CompNr = @OpCodeCompNr
         END
+   
+        IF @ParamMode1 = 0 SELECT @1stNr = Val FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr
+        IF @ParamMode1 = 1 SELECT @1stNr = Val FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr
+        IF @ParamMode1 = 2 SELECT @1stNr = Val FROM OpCodes WHERE Ind = (SELECT Val + @RelativeBase FROM OpCodes WHERE Ind = @Pointer + 1 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr
 
-        --PRINT 'The value of the first number is: ' + CAST(@FirstNr AS VARCHAR(20))
+        IF @ParamMode2 = 0 SELECT @2ndNr = Val FROM OpCodes WHERE Ind = (SELECT Val FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr
+        IF @ParamMode2 = 1 SELECT @2ndNr = Val FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr
+        IF @ParamMode2 = 2 SELECT @2ndNr = Val FROM OpCodes WHERE Ind = (SELECT Val + @RelativeBase FROM OpCodes WHERE Ind = @Pointer + 2 AND CompNr = @OpCodeCompNr) AND CompNr = @OpCodeCompNr
 
-        -- These three only take 1 parameter, for the rest we need to determine the 2nd parameter
-        IF @Instr NOT IN (3, 4, 9) 
-        BEGIN
-            SELECT @SecondNr = Val FROM ##OpCodes WHERE Ind = @Pointer + 2 AND Phase = @Phase
-            --PRINT 'The second parameter is in mode: ' + CAST(@ParamMode2 AS VARCHAR(1))
+        --IF @ParamMode3 = 0 
+        SELECT @3rdNr = Val FROM OpCodes WHERE Ind = @Pointer + 3 AND CompNr = @OpCodeCompNr
+        IF @ParamMode3 = 2 SET @3rdNr = @3rdNr + @RelativeBase
+        --@ParamMode3 should never be 1
 
-            IF @ParamMode2 = 0 
-            BEGIN
-                -- If the reference is to an unknown memory address, add it with value 0
-                IF NOT EXISTS(SELECT 1 FROM ##OpCodes WHERE Ind = @SecondNr) INSERT ##OpCodes(Ind, Val, Phase) SELECT @SecondNr, 0, @Phase
+        IF @Debug = 1
+            PRINT ISNULL(
+                'Opcodecomp: ' + CAST(@OpCodeCompNr AS VARCHAR(3)) + 
+                ' Pointer: ' + CAST(@Pointer AS VARCHAR(5)) + 
+                ' ParamInstr: ' + CAST(@ParameterInstr AS VARCHAR(10)) + 
+                ' Instr: ' + CAST(@Instr AS VARCHAR(2)) + 
+                ' 1stNr: ' + ISNULL(CAST(@1stNr AS VARCHAR(500)), '-') + 
+                ' 2ndNr: ' + ISNULL(CAST(@2ndNr AS VARCHAR(500)), '-') + 
+                ' 3rdNr: ' + ISNULL(CAST(@3rdNr AS VARCHAR(500)), '-') + 
+                ' ParamMode1: ' + ISNULL(CAST(@ParamMode1 AS VARCHAR(1)), '-') + 
+                ' ParamMode2: ' + ISNULL(CAST(@ParamMode2 AS VARCHAR(1)), '-') +
+                ' ParamMode3: ' + ISNULL(CAST(@ParamMode3 AS VARCHAR(1)), '-') +
+                ' RelativeBase: ' + CAST(@RelativeBase AS VARCHAR(6))
+                , 'Log fail')
 
-                SELECT @SecondNr = Val FROM ##OpCodes WHERE Ind = @SecondNr AND @Phase = Phase
-            END
-            IF @ParamMode2 = 2
-            BEGIN
-                -- If the reference is to an unknown memory address, add it with value 0
-                IF NOT EXISTS(SELECT 1 FROM ##OpCodes WHERE Ind = @SecondNr + @Base) INSERT ##OpCodes(Ind, Val, Phase) SELECT @SecondNr + @Base, 0, @Phase
+        --SELECT @ParameterInstr AS [PI], @Pointer AS P, @RelativeBase AS RB, * FROM OpCodes ORDER BY Ind
 
-                SELECT @SecondNr = Val FROM ##OpCodes WHERE Ind = @SecondNr + @Base AND @Phase = Phase
-            END
-
-            --PRINT 'The value of the second number is: ' + CAST(@SecondNr AS VARCHAR(20))
-
-        END
-
-        -- These four take 3 parameters
-        IF @Instr IN (1, 2, 7, 8) 
-        BEGIN
-
-            --PRINT 'The third parameter is in mode: ' + CAST(@ParamMode3 AS VARCHAR(1))
-
-            SELECT @ThirdNr = Val FROM ##OpCodes WHERE Ind = @Pointer + 3 AND Phase = @Phase
-
-            IF @ParamMode3  = 2
-                SELECT @ThirdNr = @ThirdNr + @Base
-
-            -- Check if memory slot exists
-            IF NOT EXISTS(SELECT 1 FROM ##OpCodes WHERE Ind = @ThirdNr) INSERT ##OpCodes(Ind, Val, Phase) SELECT @ThirdNr, 0, @Phase
-
-            --PRINT 'The value of the third number is: ' + CAST(@ThirdNr AS VARCHAR(20))
-
-        END
-
-        --SELECT *, @Instr FROM ##OpCodes
-        --PRINT CAST(@ParameterInstr AS VARCHAR(20)) + ' ' + CAST(@FirstNr AS VARCHAR(20)) + ' ' + ISNULL(CAST(@SecondNr AS VARCHAR(20)), 'X') + ' ' + ISNULL(CAST(@ThirdNr AS VARCHAR(20)), 'X')
- 
         IF @Instr In (1,2)
+        -- Add (1) or Multiply (2) two numbers
         BEGIN
-
-            UPDATE ##OpCodes
-            SET Val = CASE WHEN @Instr = 1 THEN @FirstNr + @SecondNr
-                           WHEN @Instr = 2 THEN @FirstNr * @SecondNr
+            UPDATE OpCodes
+            SET Val = CASE WHEN @Instr = 1 THEN @1stNr + @2ndNr
+                            WHEN @Instr = 2 THEN @1stNr * @2ndNr
                                             ELSE Val END
-            WHERE Ind = @ThirdNr AND Phase = @Phase
+            WHERE Ind = @3rdNr AND CompNr = @OpCodeCompNr
 
             SET @Pointer = @Pointer + 4
+
         END
 
         IF @Instr = 3
+        -- The OpcodeComp got an input parameter when it was started. Assign this input to a register
+        -- After the input has been 'consumed' exit the OpcodeComp to get a new input
         BEGIN
 
-            --PRINT 'Phase: ' + CAST(@Phase AS VARCHAR(2))
-            --PRINT 'Input: ' + CAST(@Input AS VARCHAR(2))
+            -- Retrieve the first number because it will be used as output
+            SELECT @1stNr = Val FROM OpCodes WHERE Ind = @Pointer + 1 AND @OpCodeCompNr = CompNr
 
-            --For now
-            SELECT @FirstNr = Val FROM ##OpCodes WHERE Ind = @Pointer + 1 AND Phase = @Phase
+            IF @ParamMode1 = 0                 
+                UPDATE OpCodes
+                SET Val = @Input
+                WHERE Ind = @1stNr AND CompNr = @OpCodeCompNr
 
-            UPDATE ##OpCodes
-            SET Val = @Input
-            WHERE Ind = @FirstNr + @Base AND Phase = @Phase
+            IF @ParamMode1 = 1 PRINT '*** UNEXPECTED PARAMETER MODE FOR INSTRUCTION 3 ***'
 
+            IF @ParamMode1 = 2
+                UPDATE OpCodes
+                SET Val = @Input
+                WHERE Ind = (@1stNr + @RelativeBase) AND CompNr = @OpCodeCompNr
+                    
             SET @Pointer = @Pointer + 2
+
+            UPDATE ##Pointers 
+            SET Pointer = @Pointer
+            ,   RelativeBase = @RelativeBase
+            WHERE OpCodeCompNr = @OpCodeCompNr
+            
+            SET @Output = -99999
+            RETURN
 
         END
 
         IF @Instr = 4
+        -- Output the value in a certain register
         BEGIN
-            IF @ParamMode1 IN (0, 2) SELECT @Output = @FirstNr
-                          ELSE SELECT @Output = Val FROM ##OpCodes WHERE Ind = @Pointer + 1 AND Phase = @Phase
 
-            --PRINT 'Output = ' + CAST(@Output AS VARCHAR(20))
+            SET @Output = @1stNr
+
+            --PRINT 'Output = ' + CAST(@Output AS VARCHAR(100))
 
             SET @Pointer = @Pointer + 2
 
-            UPDATE ##Pointers SET Pointer = @Pointer WHERE Phase = @Phase
-            UPDATE ##Pointers SET Pointer = @Base WHERE Phase = -1 * @Phase
-
-            RETURN 
+            UPDATE ##Pointers 
+            SET Pointer = @Pointer
+            ,   RelativeBase = @RelativeBase
+            WHERE OpCodeCompNr = @OpCodeCompNr
             
+            RETURN 
         END
 
         IF @Instr = 5
+        -- Jump if not zero
         BEGIN
-            IF @FirstNr <> 0 SET @Pointer = @SecondNr
+            IF @1stNr <> 0 SET @Pointer = @2ndNr
             ELSE SET @Pointer = @Pointer + 3
         END
 
         IF @Instr = 6
+        -- Jump if zero
         BEGIN
-            IF @FirstNr = 0 SET @Pointer = @SecondNr
+            IF @1stNr = 0 SET @Pointer = @2ndNr
             ELSE SET @Pointer = @Pointer + 3
         END
 
         IF @Instr = 7
+        -- If first nr is smaller than the second nr set result to 1 else 0
         BEGIN
-            UPDATE ##OpCodes
-            SET Val = CASE WHEN @FirstNr < @SecondNr THEN 1 ELSE 0 END
-            WHERE Ind = @ThirdNr AND Phase = @Phase
+            UPDATE OpCodes
+            SET Val = CASE WHEN @1stNr < @2ndNr THEN 1 ELSE 0 END
+            WHERE Ind = @3rdNr AND CompNr = @OpCodeCompNr
         
             SET @Pointer = @Pointer + 4
         END
 
         IF @Instr = 8
+        -- If first nr is equal to the second nr set result to 1 else 0
         BEGIN
     
-            UPDATE ##OpCodes
-            SET Val = CASE WHEN @FirstNr = @SecondNr THEN 1 ELSE 0 END
-            WHERE Ind = @ThirdNr AND Phase = @Phase
+            UPDATE OpCodes
+            SET Val = CASE WHEN @1stNr = @2ndNr THEN 1 ELSE 0 END
+            WHERE Ind = @3rdNr AND CompNr = @OpCodeCompNr
         
             SET @Pointer = @Pointer + 4
 
         END
 
         IF @Instr = 9
+        -- Adjust the relative base
         BEGIN
-
-            SET @Base = @Base + @FirstNr
-
+    
+            SET @RelativeBase = @RelativeBase + @1stNr
+        
             SET @Pointer = @Pointer + 2
 
-            --PRINT 'Base is now: ' + CAST(@Base AS VARCHAR(5))
         END
-
     END
 
---    DROP TABLE ##OpCodes
-
-    SET @Output = -99
+-- Natural program end
+    SET @Output = -999999
     RETURN
 
 END
+
 */
+
