@@ -5,7 +5,7 @@ SET NOCOUNT ON
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input20.txt'
+FROM 'C:\Source\AdventOfCode\2019\input20.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 CREATE TABLE ##Donut (ID INT IDENTITY(1,1), x INT, y INT, val CHAR(2), UNIQUE(x,y))
