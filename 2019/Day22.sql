@@ -1,11 +1,13 @@
 use Test_WME
 
+--It is slow but we can simply execute the instructions and see the result
+
 SET NOCOUNT ON
 
 CREATE TABLE #Input (Nr NVARCHAR(MAX));
 
 BULK INSERT #Input
-FROM 'C:\Source\AdventOfCode\input22.txt'
+FROM 'C:\Source\AdventOfCode\2019\input22.txt'
 WITH (ROWTERMINATOR = '0x0A');
 
 CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), InstrType INT, InstrCount INT)
@@ -15,9 +17,7 @@ SELECT CASE WHEN Nr LIKE 'deal with increment%' THEN 3
             WHEN Nr LIKE 'cut%' THEN 2
             WHEN Nr LIKE 'deal into new stack%' THEN 1
             END
-, --LEFT(
-    REPLACE(REPLACE(REPLACE(Nr, 'deal with increment ', ''), 'deal into new stack', '0'), 'cut ', '')
-    --, LEN(REPLACE(REPLACE(REPLACE(Nr, 'deal with increment ', ''), 'deal into new stack', '0'), 'cut ', ''))-1)
+,      REPLACE(REPLACE(REPLACE(Nr, 'deal with increment ', ''), 'deal into new stack', '0'), 'cut ', '')
 FROM #Input
 
 --DELETE FROM ##Instructions
@@ -113,10 +113,9 @@ BEGIN
     FETCH NEXT FROM ShuffleCursor INTO @InstrType, @InstrCount
 END
 
-SELECT * FROM ##Cards
+--SELECT * FROM ##Cards
 
 SELECT * FROM ##Cards WHERE CardNr = 2019
-SELECT * FROM ##Cards WHERE ID = 2019
 
 
 CLOSE ShuffleCursor

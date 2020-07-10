@@ -1,5 +1,3 @@
--- Advent of Code header als je de IntComp nodig hebt
-
 USE Test_WME
 GO
 
