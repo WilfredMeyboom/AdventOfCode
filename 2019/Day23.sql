@@ -4,13 +4,16 @@ GO
 SET NOCOUNT ON
 
 DECLARE @ProgramFile VARCHAR(250) = 'C:\Source\AdventOfCode\2019\input23.txt'
+--SET @ProgramFile = 'C:\Source\AdventOfCode\2019\input23_example.txt'
 
 CREATE TABLE ##Pointers (OpCodeCompNr BIGINT, Pointer BIGINT, RelativeBase BIGINT, Ticks BIGINT)
+CREATE TABLE ##Logging (Opcodecomp VARCHAR(10), Pointer VARCHAR(10), ParamInstr VARCHAR(10), Instr VARCHAR(10), [1stNr] VARCHAR(10), [2ndNr] VARCHAR(10), [3rdNr] VARCHAR(10), ParamMode1 VARCHAR(500), ParamMode2 VARCHAR(500), ParamMode3 VARCHAR(500), RelativeBase VARCHAR(10))
 
 DECLARE @Output BIGINT = 0
+DECLARE @NrOfOpCodeComps INT = 50
 
 INSERT ##Pointers (OpCodeCompNr, Pointer, RelativeBase, Ticks)
-SELECT TOP 50 ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1, 0, 0, 0
+SELECT TOP (@NrOfOpCodeComps) ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1, 0, 0, 0
 FROM sys.messages
 
 
@@ -22,10 +25,10 @@ FROM sys.messages
 ------------------- IntComp loaded
 
 DECLARE @Counter INT = 0
-DECLARE @Debug INT = 0
+DECLARE @Debug INT = 2
 
 --Boot up comps
-WHILE @Counter < 50
+WHILE @Counter < @NrOfOpCodeComps
 BEGIN
 
 IF @Debug = 1 PRINT 'Initialize IntCodeComp ' + CAST(@Counter AS VARCHAR(2)) + ' at ' + CAST(GETDATE() AS VARCHAR(50))
@@ -48,9 +51,7 @@ DECLARE @Y BIGINT
 DECLARE @Dest INT
 DECLARE @CurrentComp INT = 0
 DECLARE @ID BIGINT
-DECLARE @TimeSlice INT = 0
 DECLARE @Ticks BIGINT = 0
-
 
 WHILE (SELECT COUNT(1) FROM ##PacketQueue WHERE DestComp = 255) = 0
 BEGIN
@@ -58,7 +59,8 @@ BEGIN
     -- There are two variables:
         -- There is a package for this Intcomp (Yes/No)
         -- After running this Intcomp it generates a package (Yes/No)
-
+    SET @X = NULL
+    SET @Y = NULL
 
     IF EXISTS(SELECT 1 
               FROM ##PacketQueue PQ
@@ -69,9 +71,11 @@ BEGIN
     BEGIN
 
         SELECT TOP 1 @ID = ID, @Dest = DestComp, @X = X, @Y = Y
-        FROM ##PacketQueue
+        FROM ##PacketQueue PQ
+        INNER JOIN ##Pointers P ON PQ.DestComp = P.OpCodeCompNr 
         WHERE DestComp = @CurrentComp
-        ORDER BY Ticks, ID --> Dit zou nog fout kunnen zijn. 
+          AND P.Ticks > PQ.Ticks
+        ORDER BY P.Ticks, ID 
 
     END
     ELSE 
@@ -79,7 +83,10 @@ BEGIN
         SET @X = -1
     END
 
-IF @Debug = 1 PRINT 'Run IntCodeComp ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(GETDATE() AS VARCHAR(50)) + ' with x = ' + ISNULL(CAST(@x AS VARCHAR(50)), 'Huh?') + ' and y = ' + ISNULL(CAST(@y AS VARCHAR(50)), 'N/A')
+IF @Debug = 1 PRINT 'Run IntCodeComp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+                    ' at ' + CAST(@Ticks AS VARCHAR(10)) + 
+                    ' with x = ' + ISNULL(CAST(@x AS VARCHAR(50)), 'Huh?') + 
+                    ' and y = ' + ISNULL(CAST(@y AS VARCHAR(50)), 'N/A')
 
     -- Always run the current intcomp at least once
     EXEC [dbo].[IntCodeComp]  @ProgramFile 
@@ -87,31 +94,35 @@ IF @Debug = 1 PRINT 'Run IntCodeComp ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at
                             , @X --@Input BIGINT
                             , @Output OUTPUT
 
-IF @Debug = 1 PRINT 'End of run IntCodeComp ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(GETDATE() AS VARCHAR(50)) + ' with output = ' + CAST(@Output AS VARCHAR(50)) 
+IF @Debug = 1 PRINT 'End of run IntCodeComp ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(@Ticks AS VARCHAR(10)) + ' with output = ' + CAST(@Output AS VARCHAR(50)) 
 
     IF @X <> -1 AND @Output = -99999
     -- There was input so the system should come back asking for Y
     -- In this case @Output is -99999 so we can disregard this result
     BEGIN
 
-IF @Debug = 1 PRINT 'Run IntCodeComp again ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(GETDATE() AS VARCHAR(50)) + ' with x = ' + CAST(@x AS VARCHAR(50)) + ' and y = ' + ISNULL(CAST(@y AS VARCHAR(50)), 'N/A')
+IF @Debug = 1 PRINT 'Run IntCodeComp again ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(@Ticks AS VARCHAR(10)) + ' with x = ' + CAST(@x AS VARCHAR(50)) + ' and y = ' + ISNULL(CAST(@y AS VARCHAR(50)), 'N/A')
 
-        PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+        SELECT @Ticks = Ticks FROM ##Pointers WHERE OpCodeCompNr = @CurrentComp
+
+        IF @Debug = 1 PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
              ' had as X input ' + CAST(@X AS VARCHAR(50)) +
              ' and gives as output : ' + CAST(@Output AS VARCHAR(50)) +
-             ' at timeslice : ' + CAST(@TimeSlice AS VARCHAR(10))
+             ' at ticks : ' + CAST(@Ticks AS VARCHAR(10))
 
         EXEC [dbo].[IntCodeComp]  @ProgramFile 
                                 , @CurrentComp --@OpCodeCompNr INT
                                 , @Y --@Input BIGINT
                                 , @Output OUTPUT
 
-IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(GETDATE() AS VARCHAR(50)) + ' with output = ' + CAST(@Output AS VARCHAR(50))
-        
-        PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCHAR(2)) + ' at ' + CAST(@Ticks AS VARCHAR(10)) + ' with output = ' + CAST(@Output AS VARCHAR(50))
+ 
+        SELECT @Ticks = Ticks FROM ##Pointers WHERE OpCodeCompNr = @CurrentComp
+
+        IF @Debug = 1 PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
               ' had as Y input ' + CAST(@Y AS VARCHAR(50)) +
               ' and gives as output : ' + CAST(@Output AS VARCHAR(50)) +
-              ' at timeslice : ' + CAST(@TimeSlice AS VARCHAR(10))
+              ' at ticks : ' + CAST(@Ticks AS VARCHAR(10))
 
         -- The package has been consumed so we delete it
         DELETE FROM ##PacketQueue WHERE ID = @ID
@@ -127,17 +138,25 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
     BEGIN
         SET @Dest = @Output
 
+        IF @Debug = 1 PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+              ' had as input -1' +
+              ' and gives as output : ' + CAST(@Output AS VARCHAR(50)) +
+              '. Executed to get Dest value' +
+              ' at ticks : ' + CAST(@Ticks AS VARCHAR(10))
+
         EXEC [dbo].[IntCodeComp]  @ProgramFile 
                             , @CurrentComp --@OpCodeCompNr INT
                             , -1 --@Input BIGINT
                             , @Output OUTPUT
         SET @X = @Output
 
-        PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+        SELECT @Ticks = Ticks FROM ##Pointers WHERE OpCodeCompNr = @CurrentComp
+
+        IF @Debug = 1 PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
               ' had as input -1' +
               ' and gives as output : ' + CAST(@Output AS VARCHAR(50)) +
               '. Executed to get the x value' +
-              ' at timeslice : ' + CAST(@TimeSlice AS VARCHAR(10))
+              ' at ticks : ' + CAST(@Ticks AS VARCHAR(10))
 
 
         EXEC [dbo].[IntCodeComp]  @ProgramFile 
@@ -146,27 +165,27 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
                             , @Output OUTPUT
         SET @Y = @Output
 
-        PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
+        SELECT @Ticks = Ticks FROM ##Pointers WHERE OpCodeCompNr = @CurrentComp
+
+        IF @Debug = 1 PRINT 'Comp ' + CAST(@CurrentComp AS VARCHAR(2)) + 
               ' had as input -1' +
               ' and gives as output : ' + CAST(@Output AS VARCHAR(50)) +
               '. Executed to get the y value' +
-              ' at timeslice : ' + CAST(@TimeSlice AS VARCHAR(10))
+              ' at ticks : ' + CAST(@Ticks AS VARCHAR(10))
 
-        SELECT @Ticks = Ticks FROM ##Pointers WHERE OpCodeCompNr = @CurrentComp
+        IF @Debug = 2 PRINT 'To the queue | Address: ' + CAST(@Dest AS VARCHAR(2)) + 
+                            ', X: ' + CAST(@X AS VARCHAR(50)) + 
+                            ', Y: ' + CAST(@Y AS VARCHAR(50)) + 
+                            ', Ticks: ' + CAST(@Ticks AS VARCHAR(10)) + 
+                            ', From IntComp: ' + CAST(@CurrentComp AS VARCHAR(2))
 
         INSERT ##PacketQueue (DestComp, X, Y, OrgComp, Ticks) SELECT @Dest, @X, @Y, @CurrentComp, @Ticks
 
     END
 
-    --SET @CurrentComp = (@CurrentComp + 1) % 50
+    --SET @CurrentComp = (@CurrentComp + 1) % @NrOfOpCodeComps
     -- Start the IntcodeComp who is farthest behind the others. In case of a tie the one with a lower number
     SELECT TOP 1 @CurrentComp = P.OpCodeCompNr FROM ##Pointers P ORDER BY Ticks, OpCodeCompNr 
-
-    IF @CurrentComp = 0 
-    BEGIN
-        SET @TimeSlice = @TimeSlice + 1
-        PRINT 'TimeSlice : ' + CAST(@TimeSlice AS VARCHAR(10)) + ' at ' + CAST(GETDATE() AS VARCHAR(50))
-    END
 
 END
 
@@ -177,9 +196,15 @@ SELECT * FROM ##PacketQueue
 DROP TABLE ##PacketQueue
 DROP TABLE ##Pointers
 DROP TABLE Opcodes
+DROP TABLE ##Logging
 
 */
--- Run gestart om 10:06 en gestopt op 11:34
+
+--ID	DestComp	X	    Y	    OrgComp	Ticks
+--67	255	        93889	22650	32	    1784
+-- Query draait 1:19:18
+
+
 /*
 Changed OpcodeComp:
 
@@ -187,8 +212,13 @@ Changed OpcodeComp:
 USE [Test_WME]
 GO
 
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 
-ALTER   PROCEDURE [dbo].[IntCodeComp] (@ProgramFile VARCHAR(250), @OpCodeCompNr INT, @Input BIGINT, @Output BIGINT OUTPUT) AS 
+
+ALTER PROCEDURE [dbo].[IntCodeComp] (@ProgramFile VARCHAR(250), @OpCodeCompNr INT, @Input BIGINT, @Output BIGINT OUTPUT) AS 
 BEGIN
 
     SET NOCOUNT ON
@@ -209,7 +239,8 @@ BEGIN
         --PRINT @Sql
         EXEC sp_executesql @Sql
 
-        UPDATE #Input SET Nr = LEFT(Nr, LEN(Nr)-1)
+        
+        UPDATE #Input SET Nr = CASE WHEN ASCII(RIGHT(Nr,1)) NOT BETWEEN 48 AND 57 THEN LEFT(Nr, LEN(Nr)-1) ELSE Nr END
 
         --SELECT * FROM #Input
 
@@ -250,7 +281,7 @@ BEGIN
     DECLARE @Debug INT = 0
 
     --This is the input which causes the debug to switch on
-    --IF @Input = 10 SET @Debug = 1
+    --IF @OpCodeCompNr = 23 SET @Debug = 1
 
     SELECT @Pointer = Pointer 
     ,      @RelativeBase = RelativeBase 
@@ -317,6 +348,19 @@ BEGIN
                 ' ParamMode3: ' + ISNULL(CAST(@ParamMode3 AS VARCHAR(1)), '-') +
                 ' RelativeBase: ' + CAST(@RelativeBase AS VARCHAR(6))
                 , 'Log fail')
+       IF @Debug = 2
+            INSERT ##Logging (Opcodecomp, Pointer, ParamInstr, Instr, [1stNr], [2ndNr], [3rdNr], ParamMode1, ParamMode2, ParamMode3, RelativeBase)
+            SELECT CAST(@OpCodeCompNr AS VARCHAR(3)),
+                   CAST(@Pointer AS VARCHAR(5)),
+                   CAST(@ParameterInstr AS VARCHAR(10)),
+                   CAST(@Instr AS VARCHAR(2)), 
+                   ISNULL(CAST(@1stNr AS VARCHAR(500)), '-'),
+                   ISNULL(CAST(@2ndNr AS VARCHAR(500)), '-'),
+                   ISNULL(CAST(@3rdNr AS VARCHAR(500)), '-'),
+                   ISNULL(CAST(@ParamMode1 AS VARCHAR(1)), '-'),
+                   ISNULL(CAST(@ParamMode2 AS VARCHAR(1)), '-'),
+                   ISNULL(CAST(@ParamMode3 AS VARCHAR(1)), '-'),
+                   CAST(@RelativeBase AS VARCHAR(6))
 
         --SELECT @ParameterInstr AS [PI], @Pointer AS P, @RelativeBase AS RB, * FROM OpCodes ORDER BY Ind
 
@@ -440,6 +484,7 @@ BEGIN
     RETURN
 
 END
+
 
 
 */

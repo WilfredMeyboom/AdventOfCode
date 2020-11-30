@@ -244,3 +244,4 @@ SELECT SUM(Val) FROM ##Eris
 --1144 is too low for part 2
 --2255 is too high for part 2
 --2184 is too high for part 2
+--2078 is correct for part 2
