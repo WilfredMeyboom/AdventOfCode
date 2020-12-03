@@ -25,7 +25,7 @@ FROM sys.messages
 ------------------- IntComp loaded
 
 DECLARE @Counter INT = 0
-DECLARE @Debug INT = 2
+DECLARE @Debug INT = 0
 
 --Boot up comps
 WHILE @Counter < @NrOfOpCodeComps
@@ -52,6 +52,8 @@ DECLARE @Dest INT
 DECLARE @CurrentComp INT = 0
 DECLARE @ID BIGINT
 DECLARE @Ticks BIGINT = 0
+
+CREATE TABLE ##Nat (ID INT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks INT, SendOut INT)
 
 WHILE (SELECT COUNT(1) FROM ##PacketQueue WHERE DestComp = 255) = 0
 BEGIN
@@ -187,6 +189,14 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
     -- Start the IntcodeComp who is farthest behind the others. In case of a tie the one with a lower number
     SELECT TOP 1 @CurrentComp = P.OpCodeCompNr FROM ##Pointers P ORDER BY Ticks, OpCodeCompNr 
 
+    IF EXISTS (SELECT 1 FROM ##PacketQueue WHERE DestComp = 255)
+    BEGIN
+        INSERT ##Nat (X, Y, Ticks, SendOut)
+        SELECT X, Y, Ticks, 0 FROM ##PacketQueue WHERE DestComp = 255
+
+        DELETE FROM ##PacketQueue WHERE DestComp = 255
+    END
+--  CREATE TABLE ##Nat (ID INT IDENTITY(1,1), Val INT, Ticks INT, SendOut INT)
 END
 
 SELECT * FROM ##PacketQueue

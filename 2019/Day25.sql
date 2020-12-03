@@ -66,6 +66,10 @@ SELECT *
 INTO Pointers
 FROM ##Pointers
 
+SELECT *
+INTO IntCompSave
+FROM Opcodes
+
 SELECT * FROM Pointers
 /*
    
@@ -100,15 +104,27 @@ SELECT * FROM Pointers
 
 */
 
+SET NOCOUNT ON
+
+DROP TABLE ##Pointers
+DROP TABLE ##Bin
+DROP TABLE ##TempResult
+DROP TABLE ##Instructions 
+
 SELECT *
 INTO ##Pointers
 FROM Pointers
+
+TRUNCATE TABLE Opcodes
+
+INSERT Opcodes
+SELECT * FROM IntCompSave
 
 CREATE TABLE ##Bin (OnOff INT)
 
 INSERT ##Bin VALUES (0),(1)
 
-CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), InstrStart VARCHAR(MAX), InstrStop VARCHAR(MAX))
+CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), InstrStart VARCHAR(MAX))
 
 INSERT ##Instructions (InstrStart)
 SELECT  
@@ -129,18 +145,19 @@ CROSS APPLY ##Bin B6
 CROSS APPLY ##Bin B7
 CROSS APPLY ##Bin B8
 
-UPDATE ##Instructions
-SET InstrStop = REPLACE(InstrStart, 'drop', 'take')
+DELETE T1 
+FROM ##Instructions T1
+INNER JOIN TriedItemSets T2 ON T1.InstrStart + 'west||' = T2.Instr
+--ORDER BY 1
 
---SELECT * FROM ##Instructions
-
-DECLARE @SecurityPassed INT = 0
-DECLARE @Ind INT = 0
+DECLARE @SecurityPassed BIGINT = 0
+DECLARE @Ind BIGINT = 0
 DECLARE @InputStart VARCHAR(MAX)
-DECLARE @InputStop VARCHAR(MAX)
-DECLARE @InputChr INT = 100
-DECLARE @Outp BIGINT = 0
-DECLARE @CharIndex INT = 1
+DECLARE @InputChr BIGINT 
+DECLARE @Outp BIGINT 
+DECLARE @CharIndex BIGINT 
+
+SELECT @Ind = MIN(ID) - 1 FROM ##Instructions
 
 CREATE TABLE ##TempResult (Res VARCHAR(MAX))
 INSERT ##TempResult (Res) VALUES ('')
@@ -150,10 +167,16 @@ BEGIN
 
     SET @Ind = @Ind + 1
 
-    SELECT @InputStart = InstrStart + 'west|'
-    ,      @InputStop = InstrStop
+    SET @InputChr = 100
+    SET @Outp = 0
+    SET @CharIndex = 1
+    UPDATE ##TempResult SET Res = ''
+
+    SELECT @InputStart = InstrStart + 'west||'
     FROM ##Instructions
     WHERE ID = @Ind
+
+    PRINT 'Trying at ' + CAST(GETDATE() AS VARCHAR(50)) + ' ' + @InputStart
 
     WHILE @Outp <> -99999 OR @CharIndex <= LEN(@InputStart)
     BEGIN
@@ -177,36 +200,22 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM ##TempResult WHERE Res LIKE '%' + 'and you are ejected back to the checkpoint' + '%')
     BEGIN
-        UPDATE ##TempResult SET Res = ''
-        SET @CharIndex = 1
-        SET @InputChr = 116
+        
+        --Incorrect item set. Restore save game
+        TRUNCATE TABLE Opcodes
+
+        INSERT Opcodes
+        SELECT * FROM IntCompSave
+
+        TRUNCATE TABLE ##Pointers
+        
+        INSERT INTO ##Pointers
+        SELECT * FROM Pointers
+
     END
     ELSE
     BEGIN
         SET @SecurityPassed = 1
-        SET @CharIndex = 1
-        SET @InputChr = 105
-        SET @InputStop = 'inv|'
-    END
-
-    WHILE @Outp <> -99999 OR @CharIndex <= LEN(@InputStop)
-    BEGIN
-
-        EXEC [dbo].[IntCodeComp]  '' 
-                                , 0 --@OpCodeCompNr INT
-                                , @InputChr --@Input BIGINT
-                                , @Outp OUTPUT
-
-        UPDATE ##TempResult SET Res = Res + ISNULL(CHAR(@Outp), '')
-
-        IF @Outp = -99999
-        BEGIN
-            SET @CharIndex = @CharIndex + 1
-            SET @InputChr = ASCII(SUBSTRING(@InputStop, @CharIndex, @CharIndex))
-            IF @InputChr = 124 SET @InputChr = 10 --Change a pipeline to an Enter
-
-            --PRINT @InputChar
-        END
     END
 
 END
@@ -215,3 +224,105 @@ PRINT @Ind
 DECLARE @Result2 VARCHAR(MAX)
 SELECT @Result2 = Res FROM ##Result
 PRINT @Result2
+
+
+/*
+--Skip previously tried sets
+
+--CREATE TABLE TriedItemSets (Instr VARCHAR(MAX))
+
+INSERT TriedItemSets (Instr) SELECT 
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop tambourine|drop festive hat|drop fixed point|west||') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop tambourine|drop festive hat|drop fixed point|west||             ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                             ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                  ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                               ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                                  ') UNION SELECT
+RTRIM('drop asterisk|drop jam|drop tambourine|drop festive hat|drop fixed point|west||                                               ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop tambourine|drop festive hat|drop fixed point|west||         ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop tambourine|drop festive hat|drop fixed point|west||                      ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop tambourine|drop festive hat|drop fixed point|west||                         ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop tambourine|drop festive hat|drop fixed point|west||                                      ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop tambourine|drop festive hat|drop fixed point|west||                           ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop tambourine|drop festive hat|drop fixed point|west||                                        ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop tambourine|drop festive hat|drop fixed point|west||                                           ') UNION SELECT
+RTRIM('drop asterisk|drop tambourine|drop festive hat|drop fixed point|west||                                                        ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop festive hat|drop fixed point|west||                ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop festive hat|drop fixed point|west||                             ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop festive hat|drop fixed point|west||                                ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop festive hat|drop fixed point|west||                                             ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop festive hat|drop fixed point|west||                                  ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop festive hat|drop fixed point|west||                                               ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop jam|drop festive hat|drop fixed point|west||                                                  ') UNION SELECT
+RTRIM('drop asterisk|drop jam|drop festive hat|drop fixed point|west||                                                               ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop festive hat|drop fixed point|west||                         ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop festive hat|drop fixed point|west||                                      ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop festive hat|drop fixed point|west||                                         ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop festive hat|drop fixed point|west||                                                      ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop festive hat|drop fixed point|west||                                           ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop festive hat|drop fixed point|west||                                                        ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop festive hat|drop fixed point|west||                                                           ') UNION SELECT
+RTRIM('drop asterisk|drop festive hat|drop fixed point|west||                                                                        ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop tambourine|drop fixed point|west||                 ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop tambourine|drop fixed point|west||                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop tambourine|drop fixed point|west||                                 ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop tambourine|drop fixed point|west||                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop tambourine|drop fixed point|west||                                   ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop tambourine|drop fixed point|west||                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop jam|drop tambourine|drop fixed point|west||                                                   ') UNION SELECT
+RTRIM('drop asterisk|drop jam|drop tambourine|drop fixed point|west||                                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop tambourine|drop fixed point|west||                          ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop tambourine|drop fixed point|west||                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop tambourine|drop fixed point|west||                                          ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop tambourine|drop fixed point|west||                                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop tambourine|drop fixed point|west||                                            ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop tambourine|drop fixed point|west||                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop tambourine|drop fixed point|west||                                                            ') UNION SELECT
+RTRIM('drop asterisk|drop tambourine|drop fixed point|west||                                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop fixed point|west||                                 ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop fixed point|west||                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop fixed point|west||                                                 ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop fixed point|west||                                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop fixed point|west||                                                   ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop fixed point|west||                                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop jam|drop fixed point|west||                                                                   ') UNION SELECT
+RTRIM('drop asterisk|drop jam|drop fixed point|west||                                                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop fixed point|west||                                          ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop fixed point|west||                                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop fixed point|west||                                                          ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop fixed point|west||                                                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop fixed point|west||                                                            ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop fixed point|west||                                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop fixed point|west||                                                                            ') UNION SELECT
+RTRIM('drop asterisk|drop fixed point|west||                                                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop tambourine|drop festive hat|west||                 ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop tambourine|drop festive hat|west||                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop tambourine|drop festive hat|west||                                 ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop tambourine|drop festive hat|west||                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop tambourine|drop festive hat|west||                                   ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop tambourine|drop festive hat|west||                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop jam|drop tambourine|drop festive hat|west||                                                   ') UNION SELECT
+RTRIM('drop asterisk|drop jam|drop tambourine|drop festive hat|west||                                                                ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop tambourine|drop festive hat|west||                          ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop tambourine|drop festive hat|west||                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop tambourine|drop festive hat|west||                                          ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop tambourine|drop festive hat|west||                                                       ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop tambourine|drop festive hat|west||                                            ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop tambourine|drop festive hat|west||                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop tambourine|drop festive hat|west||                                                            ') UNION SELECT
+RTRIM('drop asterisk|drop tambourine|drop festive hat|west||                                                                         ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop space heater|drop jam|drop festive hat|west||                                 ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop space heater|drop jam|drop festive hat|west||                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop space heater|drop jam|drop festive hat|west||                                                 ') UNION SELECT
+RTRIM('drop asterisk|drop space heater|drop jam|drop festive hat|west||                                                              ') UNION SELECT
+RTRIM('drop asterisk|drop antenna|drop easter egg|drop jam|drop festive hat|west||                                                   ') UNION SELECT
+RTRIM('drop asterisk|drop easter egg|drop jam|drop festive hat|west||                                                                ') 
+
+Trying at Dec  2 2020  6:11PM drop asterisk|drop antenna|drop jam|drop festive hat|west||
+
+
+u may proceed." and you enter the cockpit.
+Santa notices your small droid, looks puzzled for a moment, realizes what has happened, and radios your ship directly.
+"Oh, hello! You should be able to get in by typing 2147485856 on the keypad at the main airlock."
+*/
