@@ -44,7 +44,7 @@ DROP TABLE ##PassData
 */
 
 -- 259 is too low for part 1
-
+-- 260 is correct for part 1
 
 
 ALTER TABLE ##PassData ADD IsValid INT
@@ -102,3 +102,5 @@ FROM ##PassData
 WHERE [Key] <> 'Cid' AND IsValid = 1
 GROUP BY PassID
 ORDER BY 2 DESC
+
+-- 153 is correct for part 2
