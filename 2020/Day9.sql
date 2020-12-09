@@ -37,6 +37,8 @@ INTO ##NrInput
 FROM cte_NumberedInput
 
 DECLARE @Target BIGINT = 23278925
+/*
+--This is what I did the first time (and it worked) but....
 
 DECLARE @TargetFound INT = 0
 DECLARE @WindowSize INT = 1
@@ -83,16 +85,42 @@ FROM ##NrInput
 WHERE ID BETWEEN 401 AND 417
 ORDER BY Line
 
-SELECT 865846 + 
-3145218--2969567 is too low
---2342370
-SELECT SUM(Line)
+SELECT 865846 + 3145218
+*/
+--2969567 is too low
+--4011064 is correct for part 2
+
+-- This is the better SQL solution
+--DECLARE @Target BIGINT = 23278925
+
+;WITH cte_Values AS (
+    SELECT ID AS StartID
+    ,      ID AS CurrentID
+    ,      Line AS Val
+    FROM ##NrInput
+
+    UNION ALL
+
+    SELECT T1.StartID
+    ,      T2.ID
+    ,      T1.Val + T2.Line
+    FROM cte_Values T1
+    INNER JOIN ##NrInput T2 ON T1.CurrentID = T2.ID - 1
+    WHERE T1.Val + T2.Line <= @Target
+)
+SELECT *
+FROM cte_Values 
+WHERE Val = @Target
+OPTION (MAXRECURSION 20000)
+
+SELECT MIN(Line) + MAX(Line)
 FROM ##NrInput
 WHERE ID BETWEEN 401 AND 417
-DECLARE @Target BIGINT = 23278925
-
 
 /*
+
+DROP TABLE ##NrInput
 DROP TABLE ##Input
+
 */
 
