@@ -59,16 +59,16 @@ BEGIN
     FROM ##Buses
     WHERE ID = @Counter
 
-    PRINT 'Next iteration with FirstBus: ' + CAST(@FirstBus AS VARCHAR(10)) + ' and SecondBus: ' + CAST(@SecondBus AS VARCHAR(10))
-    PRINT 'with offset: ' + CAST(@Offset AS VARCHAR(20)) + ' and interval: ' + CAST(@Interval AS VARCHAR(10)) + ' (Counter: ' + CAST(@Counter AS VARCHAR(3)) + ')' 
+    PRINT 'Next iteration with FirstBus: ' + CAST(@FirstBus AS VARCHAR(50)) + ' and SecondBus: ' + CAST(@SecondBus AS VARCHAR(50))
+    PRINT 'with offset: ' + CAST(@Offset AS VARCHAR(20)) + ' and interval: ' + CAST(@MaxInterval AS VARCHAR(10)) + ' (Counter: ' + CAST(@Counter AS VARCHAR(3)) + ')' 
     SET @X = 1
 
-    WHILE (@SecondBus * @X) % @FirstBus <> @Offset + @Interval--)%@FirstBus
+    WHILE (@FirstBus * @X + @MaxInterval + @Offset) % @SecondBus <> 0 
     BEGIN
         SET @X = @X + 1
     END
     
-    SET @Offset = @X * @SecondBus
+    SET @Offset = @X * @FirstBus + @Offset
     SET @FirstBus = @FirstBus * @SecondBus
 
     PRINT 'Mod found: ' + CAST(@X AS VARCHAR(10)) + ' which leads to offset ' + CAST(@Offset AS VARCHAR(20)) + ' at ' + CAST(GETDATE() AS VARCHAR(50))
@@ -77,12 +77,11 @@ BEGIN
 
 END
 
-PRINT 'Answer: ' + CAST(@Offset - @MaxInterval AS VARCHAR(20))
+PRINT 'Answer: ' + CAST(@Offset AS VARCHAR(20))
 
 DROP TABLE ##Buses
 
 --640856202464541 is correct for part 2
---Above code is too slow but using WolframAlpha.com with the logic of the code worked
 
 
 --SELECT CAST(827 AS BIGINT) * 23 * 13 * 19 * 41 * 37 * 17 * 29 * 911 
