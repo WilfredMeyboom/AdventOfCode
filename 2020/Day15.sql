@@ -18,9 +18,12 @@ DECLARE @NextNr BIGINT
 
 SELECT TOP (1) @ListLen = ID, @LastNr = Nr FROM ##Nrs ORDER BY ID DESC
 
+DECLARE @DoPart2 INT = 1
 
+IF @DoPart2 = 0
+BEGIN
 
-WHILE @ListLen < 30000000--2020
+WHILE @ListLen < 2020
 BEGIN
 
     IF (SELECT COUNT(1) FROM ##Nrs WHERE Nr = @LastNr) = 1
@@ -40,6 +43,46 @@ SELECT TOP 10 * FROM ##Nrs ORDER BY ID DESC
 
 --639 is correct for part 1
 
---DROP TABLE ##Nrs
+END
 
---30.000.000
+ELSE -- DoPart2
+
+BEGIN
+
+    CREATE TABLE ##TimestampNr (ID INT IDENTITY(1,1), Nr BIGINT NOT NULL, TimeStampNr BIGINT)
+
+    ALTER TABLE ##TimestampNr ADD CONSTRAINT PK_Nrs PRIMARY KEY (Nr)
+
+    INSERT ##TimestampNr (Nr, TimeStampNr) SELECT Nr, ID FROM ##Nrs
+
+    WHILE @ListLen <= 30000000--2020
+    BEGIN
+
+        IF NOT EXISTS (SELECT 1 FROM ##TimestampNr WHERE Nr = @LastNr)
+        BEGIN
+            INSERT ##TimestampNr (Nr,TimeStampNr) VALUES (@LastNr, @ListLen)
+            SET @LastNr = 0
+        END
+        ELSE
+        BEGIN
+            UPDATE ##TimestampNr
+            SET TimeStampNr = @ListLen
+            ,   @LastNr = @ListLen - TimestampNr
+            WHERE Nr = @LastNr
+        END
+
+        SET @ListLen = @ListLen + 1
+    END
+
+END
+
+    SELECT * FROM ##TimestampNr WHERE TimeStampNr > 29999990
+
+/*
+
+
+DROP TABLE ##Nrs
+DROP TABLE ##TimestampNr
+
+
+*/
