@@ -52,10 +52,13 @@ DECLARE @Dest INT
 DECLARE @CurrentComp INT = 0
 DECLARE @ID BIGINT
 DECLARE @Ticks BIGINT = 0
+DECLARE @LastActiveComp INT = -1
+DECLARE @DoPart1 INT = 0
+DECLARE @Done INT = 0
 
 CREATE TABLE ##Nat (ID INT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks INT, SendOut INT)
 
-WHILE (SELECT COUNT(1) FROM ##PacketQueue WHERE DestComp = 255) = 0
+WHILE @Done = 0
 BEGIN
     
     -- There are two variables:
@@ -185,9 +188,6 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
 
     END
 
-    --SET @CurrentComp = (@CurrentComp + 1) % @NrOfOpCodeComps
-    -- Start the IntcodeComp who is farthest behind the others. In case of a tie the one with a lower number
-    SELECT TOP 1 @CurrentComp = P.OpCodeCompNr FROM ##Pointers P ORDER BY Ticks, OpCodeCompNr 
 
     IF EXISTS (SELECT 1 FROM ##PacketQueue WHERE DestComp = 255)
     BEGIN
@@ -196,10 +196,41 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
 
         DELETE FROM ##PacketQueue WHERE DestComp = 255
     END
---  CREATE TABLE ##Nat (ID INT IDENTITY(1,1), Val INT, Ticks INT, SendOut INT)
+
+    IF NOT EXISTS (SELECT 1 FROM ##PacketQueue)
+        IF @LastActiveComp <> @CurrentComp
+            SET @LastActiveComp = @CurrentComp
+        ELSE
+        BEGIN
+            -- The queue is empty and we've looped over all the comps
+            SET @LastActiveComp = -1
+            
+            INSERT ##PacketQueue (DestComp, X, Y, OrgComp, Ticks)
+            SELECT TOP 1 0, X, Y, 255, @Ticks
+            FROM ##Nat
+            ORDER BY ID DESC
+
+            UPDATE ##Nat
+            SET SendOut = 1
+            WHERE ID = (SELECT MAX(ID) MaxID FROM ##Nat)
+
+        END
+    ELSE
+        SET @LastActiveComp = -1
+
+    -- Start the IntcodeComp who is farthest behind the others. In case of a tie the one with a lower number
+    SELECT TOP 1 @CurrentComp = P.OpCodeCompNr FROM ##Pointers P ORDER BY Ticks, OpCodeCompNr 
+
+    IF @DoPart1 = 1 AND (SELECT COUNT(1) FROM ##Nat) = 1 
+        SET @Done = 1
+    ELSE
+        IF EXISTS(SELECT Y FROM ##Nat WHERE SendOut = 1 GROUP BY Y HAVING COUNT(1) = 2) 
+            SET @Done = 1
+
+
 END
 
-SELECT * FROM ##PacketQueue
+SELECT * FROM ##Nat
 
 /*
 
