@@ -24,7 +24,7 @@ FROM sys.messages
 
 ------------------- IntComp loaded
 
-DECLARE @Counter INT = 0
+DECLARE @Counter BIGINT = 0
 DECLARE @Debug INT = 0
 
 --Boot up comps
@@ -44,7 +44,7 @@ IF @Debug = 1 PRINT 'Done initializing IntCodeComp ' + CAST(@Counter AS VARCHAR(
     SET @Counter = @Counter + 1
 END
 
-CREATE TABLE ##PacketQueue (ID BIGINT IDENTITY(1,1), DestComp INT, X BIGINT, Y BIGINT, OrgComp INT, Ticks INT)
+CREATE TABLE ##PacketQueue (ID BIGINT IDENTITY(1,1), DestComp INT, X BIGINT, Y BIGINT, OrgComp INT, Ticks BIGINT)
 
 DECLARE @X BIGINT
 DECLARE @Y BIGINT
@@ -56,7 +56,7 @@ DECLARE @LastActiveComp INT = -1
 DECLARE @DoPart1 INT = 0
 DECLARE @Done INT = 0
 
-CREATE TABLE ##Nat (ID INT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks INT, SendOut INT)
+CREATE TABLE ##Nat (ID BIGINT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks BIGINT, SendOut INT)
 
 WHILE @Done = 0
 BEGIN
@@ -228,12 +228,37 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
             SET @Done = 1
 
 
+    IF @CurrentComp = 0
+    BEGIN
+    --Save state
+        BEGIN TRAN
+            
+            TRUNCATE TABLE IntCompSave
+
+            INSERT IntCompSave (CompNr, Ind, Val) SELECT CompNr, Ind, Val FROM OpCodes
+
+            TRUNCATE TABLE Pointers
+
+            INSERT Pointers (OpCodeCompNr, Pointer, RelativeBase, Ticks) SELECT OpCodeCompnr, Pointer, RelativeBase, Ticks FROM ##Pointers
+
+            TRUNCATE TABLE Nat
+
+            INSERT Nat (X, Y, Ticks, SendOut) SELECT X, Y, Ticks, SendOut FROM ##Nat 
+
+            TRUNCATE TABLE PacketQueue
+
+            INSERT PacketQueue (DestComp, X, Y, OrgComp, Ticks) SELECT DestComp, X, Y, OrgComp, Ticks FROM ##PacketQueue 
+
+        COMMIT TRAN
+    END
+
 END
 
 SELECT * FROM ##Nat
 
 /*
 
+DROP TABLE ##Nat
 DROP TABLE ##PacketQueue
 DROP TABLE ##Pointers
 DROP TABLE Opcodes
