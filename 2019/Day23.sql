@@ -3,6 +3,10 @@ GO
 
 SET NOCOUNT ON
 
+--This thing is going to take some time. There is a regular save action in it. Do we want to restore to the last known state?
+DECLARE @RestoreNetworkState INT = 1
+
+
 DECLARE @ProgramFile VARCHAR(250) = 'C:\Source\AdventOfCode\2019\input23.txt'
 --SET @ProgramFile = 'C:\Source\AdventOfCode\2019\input23_example.txt'
 
@@ -27,6 +31,13 @@ FROM sys.messages
 DECLARE @Counter BIGINT = 0
 DECLARE @Debug INT = 0
 
+CREATE TABLE ##PacketQueue (ID BIGINT IDENTITY(1,1), DestComp INT, X BIGINT, Y BIGINT, OrgComp INT, Ticks BIGINT)
+
+CREATE TABLE ##Nat (ID BIGINT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks BIGINT, SendOut INT)
+
+IF @RestoreNetworkState = 0
+BEGIN
+
 --Boot up comps
 WHILE @Counter < @NrOfOpCodeComps
 BEGIN
@@ -43,8 +54,18 @@ IF @Debug = 1 PRINT 'Done initializing IntCodeComp ' + CAST(@Counter AS VARCHAR(
     
     SET @Counter = @Counter + 1
 END
+END --RestoreNetworkState
 
-CREATE TABLE ##PacketQueue (ID BIGINT IDENTITY(1,1), DestComp INT, X BIGINT, Y BIGINT, OrgComp INT, Ticks BIGINT)
+IF @RestoreNetworkState = 1
+BEGIN
+    -- Restore Network to last known state
+    TRUNCATE TABLE OpCodes
+    INSERT OpCodes (CompNr, Ind, Val) SELECT CompNr, Ind, Val FROM IntCompSave
+    TRUNCATE TABLE ##Pointers
+    INSERT ##Pointers (OpCodeCompNr, Pointer, RelativeBase, Ticks) SELECT OpCodeCompnr, Pointer, RelativeBase, Ticks FROM Pointers
+    INSERT ##Nat (X, Y, Ticks, SendOut) SELECT X, Y, Ticks, SendOut FROM Nat 
+    INSERT ##PacketQueue (DestComp, X, Y, OrgComp, Ticks) SELECT DestComp, X, Y, OrgComp, Ticks FROM PacketQueue 
+END
 
 DECLARE @X BIGINT
 DECLARE @Y BIGINT
@@ -55,8 +76,6 @@ DECLARE @Ticks BIGINT = 0
 DECLARE @LastActiveComp INT = -1
 DECLARE @DoPart1 INT = 0
 DECLARE @Done INT = 0
-
-CREATE TABLE ##Nat (ID BIGINT IDENTITY(1,1), X BIGINT, Y BIGINT, Ticks BIGINT, SendOut INT)
 
 WHILE @Done = 0
 BEGIN
@@ -197,26 +216,31 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
         DELETE FROM ##PacketQueue WHERE DestComp = 255
     END
 
-    IF NOT EXISTS (SELECT 1 FROM ##PacketQueue)
-        IF @LastActiveComp <> @CurrentComp
-            SET @LastActiveComp = @CurrentComp
-        ELSE
-        BEGIN
-            -- The queue is empty and we've looped over all the comps
-            SET @LastActiveComp = -1
-            
-            INSERT ##PacketQueue (DestComp, X, Y, OrgComp, Ticks)
-            SELECT TOP 1 0, X, Y, 255, @Ticks
-            FROM ##Nat
-            ORDER BY ID DESC
-
-            UPDATE ##Nat
-            SET SendOut = 1
-            WHERE ID = (SELECT MAX(ID) MaxID FROM ##Nat)
-
-        END
-    ELSE
+    IF EXISTS (SELECT 1 FROM ##PacketQueue)
+    BEGIN
         SET @LastActiveComp = -1
+    END
+    ELSE
+        IF @LastActiveComp = -1
+        BEGIN
+            SET @LastActiveComp = @CurrentComp
+        END
+        ELSE
+            IF @LastActiveComp = @CurrentComp
+            BEGIN
+                -- The queue is empty and we've looped over all the comps
+                SET @LastActiveComp = -1
+            
+                INSERT ##PacketQueue (DestComp, X, Y, OrgComp, Ticks)
+                SELECT TOP 1 0, X, Y, 255, @Ticks
+                FROM ##Nat
+                ORDER BY ID DESC
+
+                UPDATE ##Nat
+                SET SendOut = 1
+                WHERE ID = (SELECT MAX(ID) MaxID FROM ##Nat)
+
+            END
 
     -- Start the IntcodeComp who is farthest behind the others. In case of a tie the one with a lower number
     SELECT TOP 1 @CurrentComp = P.OpCodeCompNr FROM ##Pointers P ORDER BY Ticks, OpCodeCompNr 
@@ -255,6 +279,9 @@ IF @Debug = 1 PRINT 'End of run IntCodeComp again ' + CAST(@CurrentComp AS VARCH
 END
 
 SELECT * FROM ##Nat
+
+--Phew, that took a long time (in the order of days)
+-- 17298 is correct for part 2
 
 /*
 
