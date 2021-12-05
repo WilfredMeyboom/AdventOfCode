@@ -1,42 +1,32 @@
 USE Test_WME
 
+DECLARE @year VARCHAR(4) = '2021'
+DECLARE @day VARCHAR(2)  = '1'
 
-IF EXISTS (SELECT * FROM tempdb.sys.tables WHERE name LIKE '%Input%') DROP TABLE ##Input
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day 
 
-BULK INSERT ##Input
-FROM 'C:\Source\AdventOfCode\2021\Input1.txt'
-WITH (ROWTERMINATOR = '0x0A');
-
---SELECT ROW_NUMBER() OVER (ORDER BY(SELECT 0)) AS RN, Line FROM ##Input
+SELECT TOP 10 * FROM ##InputInts
 
 
-
-;WITH cte_input AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY(SELECT 0)) AS RN, CAST(Line AS INT) AS Line FROM ##Input
-)
-SELECT COUNT(1) --* 
-FROM cte_input c1
-LEFT JOIN cte_input c2 ON c1.rn + 1= c2.rn
-WHERE ISNULL(c1.Line,0) < c2.Line
+SELECT COUNT(1) AS Part1
+FROM ##InputInts c1
+LEFT JOIN ##InputInts c2 ON c1.Ind + 1= c2.Ind
+WHERE ISNULL(c1.Val,0) < c2.Val
 ORDER BY 1
 
 --1215 is correct for part 1
 
-;WITH cte_input AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY(SELECT 0)) AS RN, CAST(Line AS INT) AS Line FROM ##Input
-), cte_slidingwindow AS (
-    SELECT c1.rn,C1.Line + c2.Line + c3.Line AS Line FROM cte_input c1
-    LEFT JOIN cte_input c2 ON c1.rn + 1= c2.rn
-    LEFT JOIN cte_input c3 ON c2.rn + 1= c3.rn
+;WITH cte_slidingwindow AS (
+    SELECT c1.Ind AS rn, C1.Val + c2.Val + c3.Val AS Line 
+    FROM ##InputInts c1
+    LEFT JOIN ##InputInts c2 ON c1.Ind + 1= c2.Ind
+    LEFT JOIN ##InputInts c3 ON c2.Ind + 1= c3.Ind
 )
-SELECT COUNT(1) --*
+SELECT COUNT(1) AS Part2 --*
 FROM cte_slidingwindow c1
 LEFT JOIN cte_slidingwindow c2 ON c1.rn + 1= c2.rn
 WHERE c1.Line < c2.Line
 ORDER BY 1
 
 --1150 is correct for part 2
-
-DROP TABLE ##Input
-
