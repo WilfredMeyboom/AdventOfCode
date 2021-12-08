@@ -1,34 +1,20 @@
-use Test_WME
+
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '3'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input3.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day 
 
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputSplit
+--SELECT TOP 10 * FROM ##InputSplitCust
 
-CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), InstrNr INT, Instr CHAR)
-
-;WITH cte_Instr AS (
-    SELECT 1 AS InstrNr
-    ,      LEFT(Line, 1) AS Instr
-    ,      SUBSTRING(Line, 2, LEN(Line)) AS Remainder
-    FROM ##Input
-    UNION ALL
-    SELECT InstrNr + 1
-    ,      LEFT(Remainder, 1) AS Instr
-    ,      SUBSTRING(Remainder, 2, LEN(Remainder)) AS Remainder
-    FROM cte_Instr
-    WHERE LEN(Remainder) > 0
-)
-INSERT ##Instructions (InstrNr, Instr)
-SELECT InstrNr, Instr
-FROM cte_Instr
-OPTION (MAXRECURSION 10000)
-
---SELECT * FROM ##Instructions
 
 DECLARE @Instr CHAR
 DECLARE @PosX INT = 0
@@ -41,7 +27,7 @@ INSERT ##Map (X,Y) VALUES (0,0)
 CREATE UNIQUE INDEX UQ_Map ON ##Map (X, Y)
 
 DECLARE MoveCursor CURSOR FOR 
-SELECT Instr FROM ##Instructions ORDER BY InstrNr
+SELECT Val FROM ##InputGrid ORDER BY RowNr, ColNr
 
 OPEN MoveCursor
 
@@ -58,7 +44,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM ##Map WHERE X = @PosX AND Y = @PosY)
         INSERT ##Map (X, Y) SELECT @PosX, @PosY
 
-    PRINT 'X: ' + CAST(@PosX AS VARCHAR(3)) + ' ' + 'Y: ' + CAST(@PosY AS VARCHAR(3)) + ' ' + @Instr
+    --PRINT 'X: ' + CAST(@PosX AS VARCHAR(3)) + ' ' + 'Y: ' + CAST(@PosY AS VARCHAR(3)) + ' ' + @Instr
 
     FETCH NEXT FROM MoveCursor INTO @Instr
 
@@ -68,7 +54,7 @@ END
 CLOSE MoveCursor
 DEALLOCATE MoveCursor
 
-SELECT * FROM ##Map
+SELECT COUNT(1) AS Part1 FROM ##Map
 
 --2572 is correct for part 1
 
@@ -80,7 +66,7 @@ DECLARE @PosX2 INT = 0
 DECLARE @PosY2 INT = 0
 
 DECLARE MoveCursor CURSOR FOR 
-SELECT Instr FROM ##Instructions ORDER BY InstrNr
+SELECT Val FROM ##InputGrid ORDER BY RowNr, ColNr
 
 OPEN MoveCursor
 
@@ -116,15 +102,12 @@ BEGIN
 
 END
 
-SELECT * FROM ##Map
+CLOSE MoveCursor
+DEALLOCATE MoveCursor
+
+SELECT COUNT(1) AS Part2 FROM ##Map
 
 --2631 is correct for part 2
 
---SELECT * FROM ##Instructions
-/*
-
 DROP TABLE ##Map
-DROP TABLE ##Instructions
-DROP TABLE ##Input
 
-*/
