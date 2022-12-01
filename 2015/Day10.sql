@@ -57,6 +57,9 @@ BEGIN
 
     SET @Output = @Output + CAST(@Count AS VARCHAR(3)) + @Number
 
+    IF @Counter = 40 SELECT @Counter AS Iterations, LEN(@Output) AS Part1
+    IF @Counter = 50 SELECT @Counter AS Iterations, LEN(@Output) AS Part2
+
     SET @Counter = @Counter + 1
 
     SET @Input = @Output
@@ -66,26 +69,14 @@ BEGIN
 END
 
 
-SELECT @Output
-SELECT LEN(@Output)
-
---SELECT * FROM ##Results
-
---DROP TABLE ##Results
-
---IN: 1113122113
---OUT: 311311222113
+--SELECT @Output
+--SELECT LEN(@Output)
 
 
+DROP TABLE ##Results
 
---2652 is too low for part 1
---2722 is too low for part 1
+-- Runtime: 17:20:19  :/
+
 --360154 is correct for part 1
 
-
-
---5102693 Too low for part 2
---5125912 Too high for part 2
---5101943 Too low for part 2
---5110000 is incorrect for part 2
 --5103798 is correct for part 2
