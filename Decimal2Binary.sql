@@ -1,7 +1,7 @@
 USE Test_WME
 GO
 
-CREATE OR ALTER FUNCTION dbo.Decimal2Binary (@dec AS BIGINT, @returnLength INT = 32) RETURNS VARCHAR(32)
+CREATE OR ALTER FUNCTION dbo.Decimal2Binary (@dec AS BIGINT, @returnLength INT = 0) RETURNS VARCHAR(32)
 AS
 BEGIN
 
@@ -24,8 +24,12 @@ BEGIN
         SET @ind = @ind - 1
     END
 
-    IF CHARINDEX('1', @res) > @returnLength SET @returnLength = 33 - CHARINDEX('1', @res) 
+    --Resultstring is always 32 bits
+    --Returnlength is allowed to reduce the resultstring as long as no significant bits are cut off
 
+    IF 33 - CHARINDEX('1', @res) > @returnLength SET @returnLength = 33 - CHARINDEX('1', @res) 
+
+    --RETURN @Res
     RETURN RIGHT(@res, @returnLength)
 
 END
@@ -33,5 +37,7 @@ END
 
 --SELECT dbo.Decimal2Binary(29,32)
 --SELECT dbo.Decimal2Binary(29,5)
+--SELECT dbo.Decimal2Binary(29,16)
+--SELECT dbo.Decimal2Binary(29,0)
 --SELECT dbo.Decimal2Binary(3245632,2)
 
