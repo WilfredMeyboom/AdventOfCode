@@ -1,228 +1,102 @@
-use Test_WME
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '12'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input12.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day, @SplitCustom = '[]{}:,;"'
 
-CREATE TABLE ##Chars (ID INT IDENTITY(1,1), Pos INT, Charac CHAR)
+--SELECT * FROM ##InputSplitCust
 
-;WITH cte_Chars AS (
-    SELECT 1 AS Pos
-    ,      LEFT(Line, 1) AS Charac
-    ,      SUBSTRING(Line, 2, LEN(Line)) AS Remainder
-    FROM ##Input
-    UNION ALL
-    SELECT Pos + 1
-    ,      LEFT(Remainder, 1)
-    ,      SUBSTRING(Remainder, 2, LEN(Remainder)) 
-    FROM cte_Chars
-    WHERE LEN(Remainder) > 0
-)
-INSERT ##Chars (Pos, Charac)
-SELECT Pos, Charac
-FROM cte_Chars
-OPTION (MAXRECURSION 27000)
-
-
-DECLARE @Char CHAR
-DECLARE @Pos INT
-DECLARE @PreviousPos INT = 0
-DECLARE @Result VARCHAR(10) = ''
-
-CREATE TABLE ##Results (ID INT IDENTITY(1,1), Result INT)
-
-DECLARE CharCursor CURSOR FOR 
-SELECT Pos, Charac FROM ##Chars
-WHERE Charac IN ('-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
-
-OPEN CharCursor
-
-FETCH NEXT FROM CharCursor INTO @Pos, @Char
-
-WHILE @@FETCH_STATUS = 0
-BEGIN
-
-    IF @PreviousPos = @Pos - 1
-        SET @Result = @Result + @Char
-    ELSE
-    BEGIN
-
-        INSERT ##Results (Result) SELECT CAST(@Result AS INT)
-
-        SET @Result = @Char
-
-    END
-
-
-    SET @PreviousPos = @Pos
-
-    FETCH NEXT FROM CharCursor INTO @Pos, @Char
-
-END
-
-CLOSE CharCursor
-DEALLOCATE CharCursor
-
-SELECT SUM(Result) FROM ##Results
+SELECT SUM(CAST(Piece AS INT)) AS Part1 
+FROM ##InputSplitCust 
+WHERE TRY_CAST(Piece AS INT) IS NOT NULL
 
 --111754 is correct for part 1
 
-
 /*
-
-DROP TABLE ##Input
-
+    Take the json string and search for an object {} and an array [] that don't contain arrays or objects
+    When found, replace it with it's value (sum of the numbers or 0 if it is an object containing "red")
+    Rinse, repeat until no objects and arrays are left which leaves the answer
 */
 
-CREATE TABLE ##RedPositions (Pos INT)
+DECLARE @Pos INT = 1
+DECLARE @Json VARCHAR(MAX)
+DECLARE @StartPos INT
+DECLARE @EndPos INT
+DECLARE @ArrayOrObject VARCHAR(10)
+DECLARE @ReplaceValue INT = 0
 
-INSERT ##RedPositions (Pos)
-SELECT L1.Pos AS StartRed
-FROM ##Chars L1
-INNER JOIN ##Chars L2 ON L1.Pos = L2.Pos - 1 AND L2.Charac = 'e'
-INNER JOIN ##Chars L3 ON L2.Pos = L3.Pos - 1 AND L3.Charac = 'd'
-WHERE L1.Charac = 'r'
+SELECT @Json = Line FROM ##Input
 
-
-SELECT * INTO ##BackupChars FROM ##Chars
-
-CREATE TABLE ##BracketArray (ID INT IDENTITY(1,1), Iteration INT, BracketNr INT, Type CHAR(2), OpenPos INT, ClosePos INT)
-
-DECLARE @Iteration INT = 1
-
-WHILE (SELECT COUNT(1) FROM ##Chars) > 0
+-- Keep going till we have a result
+WHILE @Pos <= LEN(@Json)
 BEGIN
 
-    ;WITH cte_OpenBracket AS (
-        SELECT Pos
-        FROM ##Chars
-        WHERE Charac = '['
-    ), cte_CloseBracket AS (
-        SELECT Pos
-        FROM ##Chars
-        WHERE Charac = ']'
-    ), cte_BracketArray AS (
-        SELECT OB.Pos AS OpenPos, CB.Pos AS ClosePos
-        FROM cte_OpenBracket OB
-        INNER JOIN cte_CloseBracket CB ON OB.Pos < CB.Pos
-        LEFT JOIN (
-            SELECT Pos
-            FROM ##Chars
-            WHERE Charac IN ('[',']','{','}')
-        ) Bracks ON Bracks.Pos BETWEEN OB.Pos + 1 AND CB.Pos - 1
-        WHERE Bracks.Pos IS NULL
-
-    ), cte_OpenCurlyBracket AS (
-        SELECT Pos
-        FROM ##Chars
-        WHERE Charac = '{'
-    ), cte_CloseCurlyBracket AS (
-        SELECT Pos
-        FROM ##Chars
-        WHERE Charac = '}'
-    ), cte_CurlyBracketArray AS (
-        SELECT OB.Pos AS OpenPos, CB.Pos AS ClosePos
-        FROM cte_OpenCurlyBracket OB
-        INNER JOIN cte_CloseCurlyBracket CB ON OB.Pos < CB.Pos
-        LEFT JOIN (
-            SELECT Pos
-            FROM ##Chars
-            WHERE Charac IN ('[',']','{','}')
-        ) Bracks ON Bracks.Pos BETWEEN OB.Pos + 1 AND CB.Pos - 1
-        WHERE Bracks.Pos IS NULL
-    )
-    INSERT ##BracketArray (Iteration, Type, BracketNr, OpenPos, ClosePos) 
-    SELECT @Iteration, '[]', ROW_NUMBER() OVER (ORDER BY (SELECT 0)), OpenPos, ClosePos FROM cte_BracketArray
-    UNION 
-    SELECT @Iteration, '{}', ROW_NUMBER() OVER (ORDER BY (SELECT 0)), OpenPos, ClosePos FROM cte_CurlyBracketArray
-
-
-    DELETE FROM C 
-    FROM ##Chars C
-    INNER JOIN ##BracketArray BA ON Iteration = @Iteration AND C.Pos BETWEEN BA.OpenPos AND BA.ClosePos
-
-    SET @Iteration = @Iteration + 1
-
-END
-
---SELECT * FROM ##Input
-
-DROP TABLE ##Chars
-SELECT * INTO ##Chars FROM ##BackupChars
-
-SELECT * FROM ##Chars
-SELECT * FROM ##RedPositions
-SELECT * FROM ##BracketArray
-
-;WITH cte_RedInBrackets AS (
-    SELECT RP.Pos, MAX(BA.OpenPos) OpenPos
-    FROM ##RedPositions RP
-    INNER JOIN ##BracketArray BA ON RP.Pos BETWEEN BA.OpenPos AND BA.ClosePos
-    GROUP BY RP.Pos
-), cte_ToBeDeleted AS (
-    SELECT BA.OpenPos, BA.ClosePos
-    FROM cte_RedInBrackets cRIB
-    INNER JOIN ##BracketArray BA ON cRIB.OpenPos = BA.OpenPos 
-    WHERE Type = '{}'
-)
-DELETE FROM C
-FROM ##Chars C
-INNER JOIN cte_ToBeDeleted cTBD ON C.Pos BETWEEN cTBD.OpenPos AND cTBD.ClosePos
-
-
-TRUNCATE TABLE ##Results
-
-DECLARE @Char CHAR
-DECLARE @Pos INT
-DECLARE @PreviousPos INT = 0
-DECLARE @Result VARCHAR(10) = ''
-
-
-DECLARE CharCursor CURSOR FOR 
-SELECT Pos, Charac FROM ##Chars
-WHERE Charac IN ('-', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
-
-OPEN CharCursor
-
-FETCH NEXT FROM CharCursor INTO @Pos, @Char
-
-WHILE @@FETCH_STATUS = 0
-BEGIN
-
-    IF @PreviousPos = @Pos - 1
-        SET @Result = @Result + @Char
-    ELSE
+    -- We found the start of an object
+    IF SUBSTRING(@Json, @Pos, 1) = '{'
     BEGIN
-
-        INSERT ##Results (Result) SELECT CAST(@Result AS INT)
-
-        SET @Result = @Char
-
+        SET @StartPos = @Pos
+        SET @ArrayOrObject = 'Object'
     END
 
+    -- We found the start of an array
+    IF SUBSTRING(@Json, @Pos, 1) = '['
+    BEGIN
+        SET @StartPos = @Pos
+        SET @ArrayOrObject = 'Array'
+    END
 
-    SET @PreviousPos = @Pos
+    -- We found the end of an object
+    IF SUBSTRING(@Json, @Pos, 1) = '}'
+    BEGIN
+    print 'Object' + CAST(@StartPos AS VARCHAR(10)) + ' ' + CAST(@Pos AS VARCHAR(10)) + ' ' + @ArrayOrObject
+        SET @EndPos = @Pos
+        IF @ArrayOrObject = 'Object'
+        BEGIN
+            IF CHARINDEX('red', SUBSTRING(@Json, @StartPos, @EndPos - @Startpos)) > 0
+            BEGIN
+                -- Object contains red so it's value is set to zero
+                SET @Json = SUBSTRING(@Json, 1, @StartPos - 1) + '0' + SUBSTRING(@Json, @EndPos + 1, LEN(@Json))
+                    
+                -- Start searching at the beginning
+                SET @Pos = 0
+            END
+            ELSE
+            BEGIN
+                -- Replace the substring with the value of the object
+                SELECT @ReplaceValue = ISNULL(SUM(CAST(value AS INT)),0) FROM STRING_SPLIT(
+                                                                        REPLACE(
+                                                                            SUBSTRING(@Json,@StartPos + 1, @EndPos - @StartPos - 1)
+                                                                        ,':',',')
+                                                                    ,',') 
+                                                                WHERE TRY_CAST(value AS INT) IS NOT NULL
+                SET @Json = SUBSTRING(@Json, 1, @StartPos - 1) + CAST(@ReplaceValue AS VARCHAR(20)) + SUBSTRING(@Json, @EndPos + 1, LEN(@Json))
+                SET @Pos = 0
+            END                
+        END -- = 'Object'
+    END -- = '}'
 
-    FETCH NEXT FROM CharCursor INTO @Pos, @Char
+    -- We found the end of an array
+    IF SUBSTRING(@Json, @Pos, 1) = ']'
+    BEGIN
+    print 'Array' + CAST(@StartPos AS VARCHAR(10)) + ' ' + CAST(@Pos AS VARCHAR(10)) + ' ' + @ArrayOrObject
+        SET @EndPos = @Pos
+        IF @ArrayOrObject = 'Array'
+        BEGIN
+            -- Replace the substring with the value of the array
+            SELECT @ReplaceValue = ISNULL(SUM(CAST(value AS INT)),0) FROM STRING_SPLIT(SUBSTRING(@Json,@StartPos + 1, @EndPos - @StartPos - 1),',') WHERE TRY_CAST(value AS INT) IS NOT NULL
+            SET @Json = SUBSTRING(@Json, 1, @StartPos - 1) + CAST(@ReplaceValue AS VARCHAR(20)) + SUBSTRING(@Json, @EndPos + 1, LEN(@Json))
+            SET @Pos = 0
+        END
+    END
 
-END
+    SET @Pos = @Pos + 1
+END --Move along the string
 
-SELECT SUM(Result) FROM ##Results
+SELECT @Json AS Part2
 
-
-CLOSE CharCursor
-DEALLOCATE CharCursor
-
-
---65402 is correct for part 2
-
-DROP TABLE ##BackupChars
-DROP TABLE ##BracketArray
-DROP TABLE ##Chars
-DROP TABLE ##Input
-DROP TABLE ##RedPositions
-DROP TABLE ##Results
+--SELECT SUM(CAST(value AS INT)) FROM STRING_SPLIT(REPLACE('"e":"orange","c":74,"a":"yellow","b":"orange","d":34,"f":124',':',','),',') WHERE TRY_CAST(value AS INT) IS NOT NULL
+--SELECT SUM(CAST(value AS INT)) FROM STRING_SPLIT('164,-41,"violet","violet",126',',') WHERE TRY_CAST(value AS INT) IS NOT NULL
