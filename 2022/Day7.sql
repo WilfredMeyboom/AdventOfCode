@@ -30,7 +30,7 @@ EXEC dbo.ParseInput @year = @year, @day = @day
     ELSE 
         IF @Instr = '$ cd ..' 
         BEGIN
-            SET @CurrentPath = REVERSE(SUBSTRING(REVERSE(@CurrentPath), CHARINDEX('|',REVERSE(@CurrentPath)) + 1, LEN(@CurrentPath)))
+            SET @CurrentPath = REVERSE(SUBSTRING(REVERSE(@CurrentPath), CHARINDEX('|',REVERSE(@CurrentPath)) + 1, LEN(@CurrentPath))) -- Cut off the last part of the path
         END
         ELSE
             IF @Instr LIKE '$ cd %' SET @CurrentPath = @CurrentPath + '|' + REPLACE(@Instr, '$ cd ', '')
@@ -49,17 +49,17 @@ EXEC dbo.ParseInput @year = @year, @day = @day
                     ,      SUBSTRING(@Instr, CHARINDEX(' ', @Instr), LEN(@Instr))
                     ,      CAST(LEFT(@Instr, CHARINDEX(' ', @Instr)) AS BIGINT)
                 END
-                ELSE
-                    IF @Instr LIKE 'dir %' INSERT ##Disk (Filepath, Fname, Size) SELECT @CurrentPath + '|' + REPLACE(@Instr, 'dir ', ''), REPLACE(@Instr, 'dir ', ''), 0
-                    ELSE
-                        PRINT @Instr
+                --ELSE
+                --    IF @Instr LIKE 'dir %' INSERT ##Disk (Filepath, Fname, Size) SELECT @CurrentPath + '|' + REPLACE(@Instr, 'dir ', ''), REPLACE(@Instr, 'dir ', ''), 0
+                --    ELSE
+                --        PRINT @Instr
 
     SET @Counter = @Counter + 1
 
   END
 
 
-SELECT * FROM ##Disk ORDER BY FilePath
+--SELECT * FROM ##Disk ORDER BY FilePath
 
 ;WITH cte_Folders AS (
     SELECT FilePath
@@ -69,18 +69,28 @@ SELECT * FROM ##Disk ORDER BY FilePath
 
     UNION ALL
 
-    SELECT REVERSE(SUBSTRING(REVERSE(Filepath), CHARINDEX('|',REVERSE(Filepath)) + 1, LEN(Filepath)))
+    SELECT REVERSE(SUBSTRING(REVERSE(Filepath), CHARINDEX('|',REVERSE(Filepath)) + 1, LEN(Filepath))) -- Cut off the last folder and add the "new" folder with the size of the "old" folder
     ,      Size
     ,      Lvl + 1
     FROM cte_Folders
     WHERE Filepath LIKE '%|%'
+), cte_SizePerFolder AS (
+    SELECT SUM(Size) AS Size
+    FROM cte_Folders
+    GROUP BY Filepath
 )
-SELECT Filepath, SUM(Size) AS TotalSize
-FROM cte_Folders
-GROUP BY Filepath
-HAVING SUM(Size) < 100000
-ORDER BY 2
+SELECT SUM(Size) AS Part1
+FROM cte_SizePerFolder
+WHERE Size < 100000
 
+
+DECLARE @Disksize BIGINT = 70000000
+DECLARE @NeededSpace BIGINT = 30000000
+DECLARE @UsedSpace BIGINT
+DECLARE @MinimumFilesizeToDelete BIGINT
+
+SELECT @UsedSpace = SUM(Size) FROM ##Disk
+SET @MinimumFilesizeToDelete = @NeededSpace - (@Disksize - @UsedSpace)  -- What is needed - what is already available
 
 ;WITH cte_Folders AS (
     SELECT FilePath
@@ -90,61 +100,16 @@ ORDER BY 2
 
     UNION ALL
 
-    SELECT REVERSE(SUBSTRING(REVERSE(Filepath), CHARINDEX('|',REVERSE(Filepath)) + 1, LEN(Filepath)))
+    SELECT REVERSE(SUBSTRING(REVERSE(Filepath), CHARINDEX('|',REVERSE(Filepath)) + 1, LEN(Filepath)))  -- Cut off the last folder and add the "new" folder with the size of the "old" folder
     ,      Size
     ,      Lvl + 1
     FROM cte_Folders
     WHERE Filepath LIKE '%|%'
 )
-SELECT Filepath, SUM(Size) AS TotalSize
+SELECT TOP(1) SUM(Size) AS Part2
 FROM cte_Folders
 GROUP BY Filepath
-HAVING SUM(Size) >= 30000000 + 48044502 - 70000000
-ORDER BY 2
+HAVING SUM(Size) >= @MinimumFilesizeToDelete
 
- --DROP TABLE ##Disk
+DROP TABLE ##Disk
 
-
-  /*
-
-  DECLARE @Folders TABLE (ID INT IDENTITY(1,1), Folder VARCHAR(MAX), Size bigint)
-
-  /* declare variables */
-  DECLARE @Path VARCHAR(MAX)
-  DECLARE @Size BIGiNt
-  
-  DECLARE folderCursor CURSOR FAST_FORWARD READ_ONLY FOR SELECT D.Filepath, D.Size FROM @Disk D
-  
-  OPEN folderCursor
-  
-  FETCH NEXT FROM folderCursor INTO @Path,@Size
-  
-  WHILE @@FETCH_STATUS = 0
-  BEGIN
-      
-      INSERT @Folders(Folder, Size)
-      SELECT value, @Size FROM STRING_SPLIT(@Path,'|') SS
-  
-      FETCH NEXT FROM folderCursor INTO @Path,@Size
-  END
-  
-  CLOSE folderCursor
-  DEALLOCATE folderCursor
-
-  SELECT * FROM @Folders F
-   
-  SELECT Folder, SUM(Size) AS Size FROM @Folders F GROUP BY F.Folder ORDER BY 2
-  SELECT Folder, SUM(Size) AS Size FROM @Folders F GROUP BY F.Folder ORDER BY 1
-  --Too Low
-
-  --SELECT 15229 + 18543 + 25094 + 34310 + 36358 + 43395 + 48696 + 58678 + 59244 + 66475 + 73557 + 85871 + 90049 + 94716 + 98744 + 98803
-
-  -- Too Low
-  --SELECT 12772 + 12772 + 15229 + 18543 + 25094 + 34310 + 34417 + 36358 + 43395 + 48696 + 58678 + 59244 + 66475 + 73557 + 85871 + 85871 + 90049 + 98744 + 98744 + 98803
-
-
-
-SELECT * FROM @Disk D 
-INNer JOIN @Disk D2 ON D.FName = D2.Fname AND D.Filepath <> D2.Filepath
-
-*/
