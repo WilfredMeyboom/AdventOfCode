@@ -49,31 +49,39 @@ SELECT @MaxRow = MAX(RowNr), @MaxCol = MAX(Colnr), @MinCol = MIN(ColNr), @MinRow
                               OR (c.Dir = 'E' AND c.NewColNr = i.ColNr - 1 AND c.NewRowNr = i.RowNr))
                               AND c.Val > i.Val
 )
-SELECT * --DISTINCT RowNr, ColNr
+SELECT * 
 INTO ##Results
 FROM cte_Grid
---WHERE NewRowNr = @MinRow OR NewColNr = @MinRow OR NewRowNr = @MaxRow OR NewColNr = @MaxCol
 
-SELECT DISTINCT RowNr, ColNr
-FROM ##Results
-WHERE NewRowNr = @MinRow OR NewColNr = @MinRow OR NewRowNr = @MaxRow OR NewColNr = @MaxCol
 
-SELECT COUNT(1) FROM ##InputGrid WHERE RowNr = @MinRow OR ColNr = @MinRow OR RowNr = @MaxRow OR ColNr = @MaxCol
+;WITH cte_UniqueTrees AS (
+    SELECT RowNr, ColNr
+    FROM ##Results
+    WHERE NewRowNr = @MinRow OR NewColNr = @MinRow OR NewRowNr = @MaxRow OR NewColNr = @MaxCol
+    GROUP BY RowNr, ColNr
+)
+SELECT COUNT(1) + MAX(E.EdgeTrees) AS Part1
+FROM cte_UniqueTrees
+CROSS APPLY (SELECT COUNT(1) AS EdgeTrees FROM ##InputGrid WHERE RowNr = @MinRow OR ColNr = @MinRow OR RowNr = @MaxRow OR ColNr = @MaxCol) AS E
 
---Runtime 5:26
-SELECT 1402 + 392
 
-SELECT *, n*w*e*s FROM (
-SELECT R.RowNr, R.Colnr, MAX(R.Step) AS MaxStep, R.Dir
-FROM ##Results R
-GROUP BY R.RowNr, R.Colnr, R.Dir
---ORDER BY R.RowNr, R.Colnr
+
+SELECT TOP 1 CASE WHEN RowNr = N - 1 THEN N - 1 ELSE N END              --Correct the number of trees for each direction if the end of the grid was reached
+           * CASE WHEN ColNr = W - 1 THEN W - 1 ELSE W END
+           * CASE WHEN ColNr = @MaxCol + 1 - E THEN E - 1 ELSE E END
+           * CASE WHEN RowNr = @MaxRow + 1 - S THEN S - 1 ELSE S END
+           AS Part2
+FROM (
+    SELECT R.RowNr, R.Colnr, MAX(R.Step) AS MaxStep, R.Dir
+    FROM ##Results R
+    GROUP BY R.RowNr, R.Colnr, R.Dir
 ) Sub
-    PIVOT (MAX(Maxstep) FOR Dir IN (N,W,E,S)
-) AS pvt
-ORDER BY 7 DESC
+PIVOT (MAX(Maxstep) FOR Dir IN (N,W,E,S)) AS pvt
+ORDER BY Part2 DESC
 
---DROP TABLE ##Results
 
---215280 too high
+DROP TABLE ##Results
 
+-- 199272 is correct for part 2
+
+-- Runtime 00:08:52
