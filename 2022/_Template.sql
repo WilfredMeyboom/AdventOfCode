@@ -1,5 +1,7 @@
 USE Test_WME
 
+SET NOCOUNT ON
+
 DECLARE @year VARCHAR(4) = '2022'
 DECLARE @day VARCHAR(2)  = '1'
 
