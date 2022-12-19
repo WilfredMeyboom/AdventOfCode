@@ -14,7 +14,6 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 --SELECT TOP 10 * FROM ##InputGrid
 --SELECT TOP 10 * FROM ##InputSplit
 --SELECT TOP 10 * FROM ##InputSplitCust
-  
 
 DECLARE @Counter INT = 0
 DECLARE @NrOfLists INT
@@ -25,8 +24,6 @@ DECLARE @Debug INT = 0
 DECLARE @Results TABLE (PairNr INT, Result INT)
 
 SELECT @NrOfLists = COUNT(1) / 2 FROM ##InputNumbered WHERE Line IS NOT NULL
---SET @NrOfLists = 1
-
 
 WHILE @Counter <= @NrOfLists
 BEGIN
@@ -35,9 +32,9 @@ BEGIN
     SELECT @Line2 = Line FROM ##InputNumbered WHERE Ind = @Counter*3 + 2
     SET @Result = NULL
 
-    PRINT '-------------------------PairNumber: ' + CAST(@Counter + 1 AS VARCHAR(6))
+    IF @Debug = 1 PRINT '-------------------------PairNumber: ' + CAST(@Counter + 1 AS VARCHAR(6))
 
-    EXEC dbo.AoCCompare2 @Line1 
+    EXEC dbo.AoCCompare  @Line1 
                        , @Line2 
                        , @Debug
                        , @Result OUTPUT
@@ -48,19 +45,12 @@ BEGIN
     SET @Counter = @Counter + 1
 END
 
-SELECT * FROM @Results R 
-SELECT * FROM @Results R WHERE Result NOT IN (0,1)
-SELECT SUM(PairNr) FROM @Results R WHERE Result = 1
+SELECT SUM(PairNr) AS Part1 FROM @Results R WHERE Result = 1
 
 --4734 is correct for part1
 
 DECLARE @Switched INT = 1
 DECLARE @Iteration INT = 0
---DECLARE @Debug INT = 0
---DECLARE @Counter INT
---DECLARE @Line1 VARCHAR(MAX)
---DECLARE @Line2 VARCHAR(MAX)
---DECLARE @Result INT 
 
 CREATE TABLE ##OrderResults (ID INT IDENTITY, Line VARCHAR(MAX))
 INSERT ##OrderResults (Line)
@@ -70,12 +60,10 @@ UNION SELECT '[[2]]' UNION SELECT '[[6]]'
 
 SET @Debug = 0
 
---SELECT * FROM ##OrderResults
-
 WHILE @Switched >= 1
 BEGIN
     
-    PRINT 'Iteratie ' + CAST(@Iteration AS VARCHAR(5)) + ' ' + CAST(GETDATE() AS VARCHAR(100))
+    IF @Debug = 1 PRINT 'Iteratie ' + CAST(@Iteration AS VARCHAR(5)) + ' ' + CAST(GETDATE() AS VARCHAR(100))
     SET @Iteration = @Iteration + 1
     SET @Switched = 0
     SET @Counter = 1
@@ -86,61 +74,56 @@ BEGIN
         SELECT @Line1 = Line FROM ##OrderResults WHERE ID = @Counter 
         SELECT @Line2 = Line FROM ##OrderResults WHERE ID = @Counter + 1
 
-        --PRINT @Counter
-        --PRINT @Line1
-        --PRINT @Line2
-
         SET @Result = NULL
 
-        EXEC dbo.AoCCompare2 @Line1 
+        EXEC dbo.AoCCompare  @Line1 
                            , @Line2 
                            , @Debug
                            , @Result OUTPUT
 
-        --PRINT @Result 
-
         IF @Result = 0
         BEGIN
-
-            --PRINT 'Switch ' + CAST(@Counter AS VARCHAR(5))
-            --PRINT @Line1
-            --PRINT @Line2
 
             UPDATE ##OrderResults SET Line = @Line2 WHERE ID = @Counter 
             UPDATE ##OrderResults SET Line = @Line1 WHERE ID = @Counter + 1
             SET @Switched = @Switched + 1
+
         END
 
         SET @Counter = @Counter + 1
     END
 
-    PRINT 'Switches ' + CAST(@Switched AS VARCHAR(6))
+    IF @Debug = 1 PRINT 'Switches ' + CAST(@Switched AS VARCHAR(6))
 
 END
 
-SELECT * FROM ##OrderResults 
-WHERE Line IN ('[[2]]','[[6]]')
-ORDER BY ID
+SELECT O1.ID * O2.ID AS Part2
+FROM ##OrderResults O1
+CROSS APPLY ##OrderResults O2
+WHERE O1.Line = '[[2]]'
+  AND O2.Line = '[[6]]'
 
-
---DROP TABLE ##OrderResults
--- Too high SELECT 198 * 253
+DROP TABLE ##OrderResults
 
 /*
-CREATE OR ALTER PROCEDURE dbo.AoCCompare2 (@Line1 VARCHAR(MAX), @Line2 VARCHAR(MAX), @Debug INT, @InOrder INT OUTPUT) 
+USE Test_WME
+GO
+
+CREATE OR ALTER PROCEDURE dbo.AoCCompare (@Line1 VARCHAR(MAX), @Line2 VARCHAR(MAX), @Debug INT, @InOrder INT OUTPUT) 
 AS
 BEGIN
 
-    -- 2 situaties:
-        --Hij start met een blokhaak
-            -- De ander start met een blokhaak --> Voor beide geldt haal het array er uit en recursie
-            -- De ander start niet met een blokhaak --> Upgrade de ander naar een array van 1 item
-        --Hij start niet met een blokhaak
-            -- De ander start met een blokhaak --> Upgrade de ander naar een array van 1 item
-            -- De ander start niet met een blokhaak --> Ga per getal vergelijken
-                -- Zijn beide lijsten leeg      --> resultaat is NULL ga verder met de rest van de string
-                -- Is één van beide lijsten leeg --> Links leeg is goed, rechts leeg is slecht
-                -- Vergelijk het eerst volgende element --> Links kleiner is goed, Links groter is slecht
+    -- 2 situations:
+        --The line starts with a square bracket
+            -- The other line also starts with a square bracket --> For both: get the array from the line, remove the brackets and call the stored procedure 
+            -- The other line doesn't start with a square bracket --> Upgrade the first item of the other line to an array containing 1 item
+        --The line doesn't start with a square bracket
+            -- The other line starts with a square bracket --> Upgrade the first item of the other line to an array containing 1 item
+            -- The other line also doesn't start with a square bracket --> Start comparing per number
+                    -- When both lists are empty --> return NULL so the original procedure can continu 
+                    -- If one list is empty      --> Left empty is good, right empty is bad
+                    -- Compare the next numbers  --> Left smaller is good, left is bigger is bad, if the numbers are the same take the next element
+
     DECLARE @Pos1 INT = 0 
     DECLARE @Pos2 INT = 0
     DECLARE @NewLine1 VARCHAR(MAX) = ''
@@ -166,7 +149,7 @@ BEGIN
         IF LEFT(@Line1,1) = '[' AND Left(@Line2,1) = '['
         BEGIN
 
-            IF @Debug = 1 PRINT '2 Blokhaken'
+            IF @Debug = 1 PRINT '2 Square Brackets'
             IF @Debug = 1 PRINT @Line1
             IF @Debug = 1 PRINT @Line2
 
@@ -188,12 +171,12 @@ BEGIN
             END
             SET @NewLine2 = SUBSTRING(@NewLine2,2,LEN(@NewLine2)-2)
 
-            EXEC dbo.AoCCompare2 @NewLine1, @NewLine2, @Debug, @InOrder OUTPUT
+            EXEC dbo.AoCCompare @NewLine1, @NewLine2, @Debug, @InOrder OUTPUT
 
             SET @Line1 = SUBSTRING(@Line1, @Pos1 + 2, LEN(@Line1))
             SET @Line2 = SUBSTRING(@Line2, @Pos2 + 2, LEN(@Line2))
 
-            IF @Debug = 1 PRINT '2 Blokhaken 2'
+            IF @Debug = 1 PRINT '2 Square Brackets Part 2'
             IF @Debug = 1 PRINT @Line1
             IF @Debug = 1 PRINT @Line2
             IF @Debug = 1 PRINT @NewLine1
@@ -203,7 +186,7 @@ BEGIN
         IF LEFT(@Line1,1) = '[' AND Left(@Line2,1) <> '['
         BEGIN
 
-            IF @Debug = 1 PRINT '1 Blokhaak Links'
+            IF @Debug = 1 PRINT '1 Square Bracket Left'
             IF @Debug = 1 PRINT @Line1
             IF @Debug = 1 PRINT @Line2
 
@@ -219,12 +202,12 @@ BEGIN
                     SET @NewLine2 = '[' + LEFT(@Line2, CHARINDEX(',',@Line2) - 1) + ']' + SUBSTRING(@Line2, CHARINDEX(',',@Line2), LEN(@Line2))
                 ELSE SET @NewLine2 = '[' + @Line2 + ']'
 
-                EXEC dbo.AoCCompare2 @Line1, @NewLine2, @Debug, @InOrder OUTPUT
+                EXEC dbo.AoCCompare @Line1, @NewLine2, @Debug, @InOrder OUTPUT
 
                 IF CHARINDEX(',',@Line1) > 1 SET @Line1 = SUBSTRING(@Line1, CHARINDEX(',',@Line1) + 1, LEN(@Line1)) ELSE SET @Line1 = ''
                 IF CHARINDEX(',',@Line2) > 1 SET @Line2 = SUBSTRING(@Line2, CHARINDEX(',',@Line2) + 1, LEN(@Line2)) ELSE SET @Line2 = ''
 
-                IF @Debug = 1 PRINT @Line1 + 'Na BH L'
+                IF @Debug = 1 PRINT @Line1 + '1 Square Bracket Left Part 2'
                 IF @Debug = 1 PRINT @Line2
             END
 
@@ -233,7 +216,7 @@ BEGIN
         IF LEFT(@Line1,1) <> '[' AND Left(@Line2,1) = '['
         BEGIN
 
-            IF @Debug = 1 PRINT '1 Blokhaak Rechts'
+            IF @Debug = 1 PRINT '1 Square Bracket Right'
             IF @Debug = 1 PRINT @Line1
             IF @Debug = 1 PRINT @Line2
 
@@ -249,12 +232,12 @@ BEGIN
                     SET @NewLine1 = '[' + LEFT(@Line1, CHARINDEX(',',@Line1) - 1) + ']' + SUBSTRING(@Line1, CHARINDEX(',',@Line1), LEN(@Line1))
                 ELSE SET @NewLine1 = '[' + @Line1 + ']'
 
-                EXEC dbo.AoCCompare2 @NewLine1, @Line2, @Debug, @InOrder OUTPUT
+                EXEC dbo.AoCCompare @NewLine1, @Line2, @Debug, @InOrder OUTPUT
 
                 IF CHARINDEX(',',@Line1) > 1 SET @Line1 = SUBSTRING(@Line1, CHARINDEX(',',@Line1) + 1, LEN(@Line1)) ELSE SET @Line1 = ''
                 IF CHARINDEX(',',@Line2) > 1 SET @Line2 = SUBSTRING(@Line2, CHARINDEX(',',@Line2) + 1, LEN(@Line2)) ELSE SET @Line2 = ''
 
-                IF @Debug = 1 PRINT @Line1 + 'Na BH R'
+                IF @Debug = 1 PRINT @Line1 + '1 Square Bracket Right Part 2'
                 IF @Debug = 1 PRINT @Line2
 
             END
@@ -296,12 +279,12 @@ BEGIN
                 IF CHARINDEX(',',@Line1) > 1 SET @NewLine1 = SUBSTRING(@Line1, CHARINDEX(',',@Line1) + 1, LEN(@Line1)) ELSE SET @NewLine1 = ''
                 IF CHARINDEX(',',@Line2) > 1 SET @NewLine2 = SUBSTRING(@Line2, CHARINDEX(',',@Line2) + 1, LEN(@Line2)) ELSE SET @NewLine2 = ''
 
-                IF @Debug = 1 PRINT 'Compare2'
+                IF @Debug = 1 PRINT 'Compare Part 2'
                 IF @Debug = 1 PRINT @NewLine1
                 IF @Debug = 1 PRINT @NewLine2
                 IF @Debug = 1 PRINT 'InOrder: ' + CAST(@InOrder AS VARCHAR(2))
 
-                IF @InOrder IS NULL EXEC dbo.AoCCompare2 @NewLine1, @NewLine2, @Debug, @InOrder OUTPUT
+                IF @InOrder IS NULL EXEC dbo.AoCCompare @NewLine1, @NewLine2, @Debug, @InOrder OUTPUT
 
                 SET @Line1 = @NewLine1
                 SET @Line2 = @NewLine2

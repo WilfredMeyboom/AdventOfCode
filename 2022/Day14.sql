@@ -35,10 +35,6 @@ SELECT @MaxX = MAX(X) + 1, @MinY = MIN(Y) - 1, @MaxY = MAX(Y) + 1 FROM @Points
 SET @MinY = 500 - @MaxX
 SET @MaxY = 500 + @MaxX
 
---PRINT @MaxX
---PRINT @MinY
---PRINT @MaxY
-
 CREATE TABLE ##Grid (ID INT IDENTITY(1,1), X INT, Y INT, Val INT)
 CREATE INDEX uqGrid ON ##Grid (X,Y)
 
@@ -53,8 +49,6 @@ FROM cte_x
 CROSS APPLY cte_y
 
 
---SELECT COUNT(1) FROM ##Grid
-
 DECLARE @RowNr INT = 0
 DECLARE @LastRowNr INT = 0
 DECLARE @X INT
@@ -62,7 +56,7 @@ DECLARE @PrevX INT
 DECLARE @Y INT
 DECLARE @PrevY INT
 
-
+-- Draw all lines into the grid
 DECLARE LineCursor CURSOR FAST_FORWARD FOR SELECT RowNr, X, Y FROM @Points
 
 OPEN LineCursor
@@ -96,7 +90,6 @@ END
 CLOSE LineCursor
 DEALLOCATE LineCursor
 
---SELECT * FROM ##Grid ORDER BY y,x
 
 DECLARE @SandOffScreen INT = 0
 DECLARE @Left INT
@@ -148,12 +141,11 @@ BEGIN
             SET @SandOffScreen = 1
         END
 
-        --PRINT CAST(@X AS VARCHAR(5)) + ' ' + CAST(@Y AS VARCHAR(5))
     END
 
 END
 
-SELECT COUNT(1) FROM ##Grid WHERE Val = 2
+SELECT COUNT(1) AS Part1 FROM ##Grid WHERE Val = 2
 
 DECLARE @SandBlocked INT = 0
 
@@ -194,7 +186,11 @@ BEGIN
 
             SET @SandStoppedMoving = 1
 
-            IF @X = 0 SET @SandBlocked = 1
+            IF @X = 0 
+            BEGIN
+                INSERT ##Grid (X, Y, Val) SELECT 0, 500, 2
+                SET @SandBlocked = 1
+            END
         END
 
         IF @X = @MaxX
@@ -206,16 +202,12 @@ BEGIN
             SET @SandStoppedMoving = 1
         END
 
-        --PRINT CAST(@X AS VARCHAR(5)) + ' ' + CAST(@Y AS VARCHAR(5))
+
     END
 
 END
 
-SELECT COUNT(1) FROM ##Grid WHERE Val = 2
+SELECT COUNT(1) AS Part2 FROM ##Grid WHERE Val = 2
 
-/*
-    DROP TABLE ##Grid
+DROP TABLE ##Grid
 
-    27935 too low
-    27936 is correct
-*/
