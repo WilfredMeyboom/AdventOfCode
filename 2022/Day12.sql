@@ -56,6 +56,6 @@ WHERE Val = 'a'
 
 --345 is correct for part 2
 
---DROP TABLE ##Grid
+DROP TABLE ##Grid
 
 -- Runtime: 00:06:51
