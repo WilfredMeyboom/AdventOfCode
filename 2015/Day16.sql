@@ -1,14 +1,12 @@
-use Test_WME
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '16'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input16.txt'
-WITH (ROWTERMINATOR = '0x0A');
-
---SELECT * FROM ##Input
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
 
 CREATE TABLE ##AuntProperties (ID INT IDENTITY(1,1), SueNr INT, Prop VARCHAR(20), Value INT)
 
@@ -37,9 +35,8 @@ FROM cte_Split
 ORDER BY SueNr
 
 
-SELECT * FROM ##AuntProperties
-
 /*
+--The relevant aunt
 
 children: 3
 cats: 7
@@ -69,55 +66,32 @@ INSERT ##KnownProps (Prop, Value) VALUES
 ('perfumes', 1)
 
 
-
-SELECT DISTINCT SueNr
+-- Get a list of all aunts that have a property that doesn't match with the expectation
+;WITH cte_AuntProps AS (
+    SELECT DISTINCT SueNr
+    FROM ##AuntProperties AP
+    INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
+    WHERE AP.Value <> KP.Value
+)
+SELECT DISTINCT AP.SueNr AS Part1
 FROM ##AuntProperties AP
-EXCEPT
-SELECT DISTINCT SueNr
+LEFT JOIN cte_AuntProps c ON AP.SueNr = c.SueNr
+WHERE c.SueNr IS NULL
+
+--Same difference, we just needed to extend the WHERE in the cte a bit
+;WITH cte_AuntProps AS (
+    SELECT DISTINCT SueNr
+    FROM ##AuntProperties AP
+    INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
+    WHERE (AP.Prop IN ('cats', 'trees') AND AP.Value <= KP.Value)
+       OR (AP.Prop IN ('pomeranians', 'goldfish') AND AP.Value >= KP.Value)
+       OR (AP.Prop NOT IN ('cats', 'trees', 'pomeranians', 'goldfish') AND AP.Value <> KP.Value)
+
+)
+SELECT DISTINCT AP.SueNr AS Part2
 FROM ##AuntProperties AP
-INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
-WHERE AP.Value <> KP.Value
+LEFT JOIN cte_AuntProps c ON AP.SueNr = c.SueNr
+WHERE c.SueNr IS NULL
 
-
-SELECT * FROM ##AuntProperties WHERE SueNr = 373
-
---373 is correct for part 1
-
-SELECT DISTINCT SueNr
-FROM ##AuntProperties AP
-
-EXCEPT
-
-SELECT DISTINCT SueNr
-FROM ##AuntProperties AP
-INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
-WHERE AP.Prop IN ('cats', 'trees') AND AP.Value < KP.Value
-
-EXCEPT
-
-SELECT DISTINCT SueNr
-FROM ##AuntProperties AP
-INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
-WHERE AP.Prop IN ('pomeranians', 'goldfish') AND AP.Value > KP.Value
-
-EXCEPT
-
-SELECT DISTINCT SueNr
-FROM ##AuntProperties AP
-INNER JOIN ##KnownProps KP ON AP.Prop = KP.Prop
-WHERE AP.Prop NOT IN ('cats', 'trees', 'pomeranians', 'goldfish') AND AP.Value <> KP.Value
-
---260 is correct for part 2
-
-/*
-the cats and trees readings indicates that there are greater than that many 
-the pomeranians and goldfish readings indicate that there are fewer than that many 
-*/
-
-
-/* 
-
-DROP TABLE ##Input
-
-*/
-
+DROP TABLE ##AuntProperties
+DROP TABLE ##KnownProps

@@ -1,23 +1,27 @@
 USE Test_WME
 
-/*
-Sprinkles: capacity 5, durability -1, flavor 0, texture 0, calories 5
-PeanutButter: capacity -1, durability 3, flavor 0, texture 0, calories 1
-Frosting: capacity 0, durability -1, flavor 4, texture 0, calories 6
-Sugar: capacity -1, durability 0, flavor 0, texture 2, calories 8
-*/
+SET NOCOUNT ON
 
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '15'
+
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
 
 CREATE TABLE ##Ingredients (ID INT IDENTITY(1,1), Name VARCHAR(20), Capacity INT, Durability INT, Flavor INT, Texture INT, Calories INT)
 
-INSERT ##Ingredients (Name, Capacity, Durability, Flavor, Texture, Calories) VALUES 
-('Sprinkles',    5, -1, 0, 0, 5),
-('PeanutButter',-1,  3, 0, 0, 1),
-('Frosting',     0, -1, 4, 0, 6),
-('Sugar',       -1,  0, 0, 2, 8)
+INSERT ##Ingredients (Name, Capacity, Durability, Flavor, Texture, Calories)
+SELECT [1],[3],[5],[7],[9],[11] FROM (
+    SELECT RowNr, PieceNr, Piece FROM ##InputSplit WHERE PieceNr IN (1,3,5,7,9,11)
+) T
+PIVOT (
+    MAX(Piece) FOR PieceNr IN ([1],[3],[5],[7],[9],[11])
+) PVT
+
 
 CREATE TABLE ##Cookies (ID INT IDENTITY(1,1), Sprinkles INT, PeanutButter INT, Frosting INT, Sugar INT)
 
+CREATE TABLE ##CookieValues (ID INT, Score BIGINT, Calories BIGINT)
 
 ;WITH cte_Nrs AS (
     SELECT TOP 101 ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1 AS Nr FROM sys.messages
@@ -66,6 +70,7 @@ WHERE Nr1.Nr + Nr2.Nr + Nr3.Nr + Nr4.Nr = 100
     FROM ##Cookies C
     CROSS APPLY ##Ingredients I
 )
+INSERT ##CookieValues (ID, Score, Calories)
 SELECT ID
 ,      CASE WHEN SUM(cC.Capacity)   > 0 THEN SUM(cC.Capacity)   ELSE 0 END 
     *  CASE WHEN SUM(cC.Durability) > 0 THEN SUM(cC.Durability) ELSE 0 END 
@@ -74,14 +79,19 @@ SELECT ID
 ,      SUM(cC.Calories)
 FROM cte_Combined cC
 GROUP BY ID
-HAVING SUM(cC.Calories) = 500 --Part 2
-ORDER BY 2 DESC
 
---13882464 is correct for part 1
---11171160 is correct for part 2
 
-/*
+SELECT TOP 1 Score AS Part1
+FROM ##CookieValues
+ORDER BY Score DESC
+
+SELECT TOP 1 Score AS Part2
+FROM ##CookieValues
+WHERE Calories = 500
+ORDER BY Score DESC
+
+
+DROP TABLE ##CookieValues
 DROP TABLE ##Cookies
-DROP TABLE ##Ingedients
+DROP TABLE ##Ingredients
 
-*/

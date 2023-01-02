@@ -1,12 +1,38 @@
-use Test_WME
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '17'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input17.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
+
+
+;WITH cte_Buckets AS (
+    SELECT CAST('|' + CAST(Ind AS VARCHAR(10)) + '|' AS VARCHAR(MAX)) AS UsedBuckets
+    ,      CAST('|' + CAST(Val AS VARCHAR(10)) + '|' AS VARCHAR(MAX)) AS UsedVolumes
+    ,      Val AS Volume
+    ,      1 AS Counter
+    ,      Val AS LastVal
+    FROM ##InputInts
+
+    UNION ALL
+
+    SELECT CAST(B.UsedBuckets + CAST(I.Ind AS VARCHAR(10)) + '|' AS VARCHAR(MAX))
+    ,      CAST(B.UsedVolumes + CAST(I.Val AS VARCHAR(10)) + '|' AS VARCHAR(MAX))
+    ,      I.Val + B.Volume
+    ,      Counter + 1
+    ,      I.Val
+    FROM cte_Buckets B
+    INNER JOIN ##InputInts I ON B.LastVal >= I.Val AND B.UsedBuckets NOT LIKE '%|' + CAST(I.Ind AS VARCHAR(10)) + '|%'
+    WHERE B.Volume <= 150
+)
+SELECT UsedVolumes, COUNT(1), Counter
+FROM cte_Buckets
+WHERE Volume = 150
+GROUP BY UsedVolumes, Counter
+
 
 CREATE TABLE ##Buckets (ID INT IDENTITY(1,1), Size INT)
 
@@ -70,7 +96,7 @@ WHERE ISNULL(B1.Size, 0)
     + ISNULL(B7.Size, 0)
     = 150
 UNION ALL
-SELECT COUNT(1)
+SELECT *---,COUNT(1)
 FROM ##Buckets B1
 INNER JOIN ##Buckets B2 ON B1.ID > B2.ID
 INNER JOIN ##Buckets B3 ON B2.ID > B3.ID

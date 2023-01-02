@@ -2,37 +2,23 @@ USE Test_WME
 
 SET NOCOUNT ON
 
-/*
-Rudolph can fly 22 km/s for  8 seconds, but then must rest for 165 seconds.
-Cupid   can fly 8  km/s for 17 seconds, but then must rest for 114 seconds.
-Prancer can fly 18 km/s for  6 seconds, but then must rest for 103 seconds.
-Donner  can fly 25 km/s for  6 seconds, but then must rest for 145 seconds.
-Dasher  can fly 11 km/s for 12 seconds, but then must rest for 125 seconds.
-Comet   can fly 21 km/s for  6 seconds, but then must rest for 121 seconds.
-Blitzen can fly 18 km/s for  3 seconds, but then must rest for 50  seconds.
-Vixen   can fly 20 km/s for  4 seconds, but then must rest for 75  seconds.
-Dancer  can fly 7  km/s for 20 seconds, but then must rest for 119 seconds.
-*/
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '14'
+
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
+
 
 CREATE TABLE ##Deer (ID INT IDENTITY(1,1), Name VARCHAR(15), Speed INT, Duration INT, RestTime INT)
 
-INSERT ##Deer (Name, Speed, Duration, RestTime) VALUES
-('Rudolph', 22,  8, 165),
-('Cupid  ', 8 , 17, 114),
-('Prancer', 18,  6, 103),
-('Donner ', 25,  6, 145),
-('Dasher ', 11, 12, 125),
-('Comet  ', 21,  6, 121),
-('Blitzen', 18,  3, 50 ),
-('Vixen  ', 20,  4, 75 ),
-('Dancer ', 7 , 20, 119)
+INSERT ##Deer (Name, Speed, Duration, RestTime) 
+SELECT [1],[4],[7],[14] FROM (
+    SELECT RowNr, PieceNr, Piece FROM ##InputSplit WHERE PieceNr IN (1,4,7,14)
+) T
+PIVOT (
+    MAX(Piece) FOR PieceNr IN ([1],[4],[7],[14])
+) PVT
 
-
---INSERT ##Deer (Name, Speed, Duration, RestTime) VALUES
---('Comet_Exp', 14, 10, 127), ('Dancer_Exp', 16, 11, 162)
-
-
-SELECT * FROM ##Deer
 
 CREATE TABLE ##Race(ID INT, Distance INT, IsRunning INT, RunningTime INT, RestingTime INT)
 
@@ -73,16 +59,19 @@ BEGIN
 END
 
 
-SELECT * FROM ##Race ORDER BY Distance
+SELECT TOP 1 Distance AS Part1
+FROM ##Race 
+ORDER BY Distance DESC
 
 --2696 is correct for part 1
 
-SELECT DeerID, COUNT(1)
+SELECT TOP 1 DeerID, COUNT(1) AS Part2
 FROM ##Leaderboard
 GROUP BY DeerID
-ORDER BY 2
+ORDER BY 2 DESC
 
 --1084 is correct for part 2
 
 DROP TABLE ##Deer
 DROP TABLE ##Race
+DROP TABLE ##Leaderboard
