@@ -1,97 +1,98 @@
-use Test_WME
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '19'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input19.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
 
 CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), Input VARCHAR(10), Output VARCHAR(20))
 
 INSERT ##Instructions (Input, Output)
 SELECT LTRIM(RTRIM(LEFT(Line, CHARINDEX('=>', Line) - 1)))
 ,      LTRIM(RTRIM(SUBSTRING(Line, CHARINDEX('=>', Line) + 2, LEN(Line))))
-FROM ##Input WHERE LEN(Line) < 20
+FROM ##Input 
+WHERE CHARINDEX('=>', Line) > 0
 
---Solution to part 1 is lost
---Answer was 509
+CREATE TABLE ##Molecule (ID INT IDENTITY(1,1), Molecule VARCHAR(MAX), Iteration INT)
+INSERT ##Molecule (Molecule, Iteration) SELECT Line, 0 FROM ##Input WHERE CHARINDEX('=>', Line) = 0
 
-CREATE TABLE ##Results (ID INT IDENTITY(1,1), Line VARCHAR(500) /*COLLATE Latin1_General_CS_AS*/, Counter INT)
+DECLARE @LenMolecule INT
+SELECT @LenMolecule = LEN(Molecule) FROM ##Molecule
 
-INSERT ##Results(Line, Counter)
-SELECT Line, -1 FROM ##Input WHERE LEN(Line) > 20
+;WITH cte_NrList AS (
+-- Get a list numbered from 1 to the string length combined with a 1 or a 2. We'll use this to generate all possible one and two letter elements in the molecule
+    SELECT TOP(2*@LenMolecule) ROW_NUMBER() OVER (ORDER BY (SELECT 0)) % (@LenMolecule + 1) AS StartInd, (ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1) / @LenMolecule + 1 AS L FROM sys.messages
+)
+SELECT COUNT(DISTINCT SUBSTRING(M.Molecule, 1, c.StartInd - 1) + I.OutPut + SUBSTRING(M.Molecule, c.StartInd + L, LEN(M.Molecule))) AS Part1
+FROM ##Molecule M
+CROSS APPLY cte_NrList c
+INNER JOIN ##Instructions I ON I.Input = SUBSTRING(M.Molecule, c.StartInd, c.L)
+WHERE c.StartInd <> 0 AND ASCII(SUBSTRING(M.Molecule, c.StartInd, 1)) BETWEEN 65 AND 90 -- All elements start with a capital letter
 
 
-DECLARE @Counter INT = 0
 
---SELECT * FROM ##Instructions 
+-- We assume that it doesn't matter which elements are replaced by which
+-- Other then Rn, Ar and Y which can be switched out easier
 
-WHILE (NOT EXISTS (SELECT 1 FROM ##Results WHERE Line = 'e')) AND @Counter < 1000
+UPDATE ##Molecule SET Molecule = REPLACE(Molecule, 'Rn', '(')
+UPDATE ##Molecule SET Molecule = REPLACE(Molecule, 'Ar', ')')
+UPDATE ##Molecule SET Molecule = REPLACE(Molecule, 'Y', ',')
+UPDATE ##Instructions SET Output = REPLACE(Output, 'Rn', '(')
+UPDATE ##Instructions SET Output = REPLACE(Output, 'Ar', ')')
+UPDATE ##Instructions SET Output = REPLACE(Output, 'Y', ',')
+
+INSERT ##Instructions (Input, Output) VALUES ('C', 'XX')
+
+DECLARE @InputStr VARCHAR(2)
+DECLARE ReplaceCursor CURSOR FOR SELECT Input FROM ##Instructions GROUP BY Input ORDER BY LEN(Input) DESC
+
+OPEN ReplaceCursor
+
+FETCH NEXT FROM ReplaceCursor INTO @InputStr
+
+WHILE @@FETCH_STATUS = 0
 BEGIN
+
+    UPDATE ##Molecule
+    SET Molecule = REPLACE(Molecule, @InputStr, 'X')
+
+    UPDATE ##Instructions
+    SET Input = REPLACE(Input, @InputStr, 'X')
+    ,   Output = REPLACE(Output, @InputStr, 'X')
+
+    FETCH NEXT FROM ReplaceCursor INTO @InputStr
+END
+
+CLOSE ReplaceCursor
+DEALLOCATE ReplaceCursor
+
+DECLARE @Iteration INT = 0
+
+
+WHILE @Iteration < 200 AND NOT EXISTS (SELECT 1 FROM ##Molecule WHERE Molecule = 'X')
+BEGIN
+
+    SET @Iteration = @Iteration + 1   
+
+    INSERT ##Molecule (Molecule, Iteration)
+    SELECT DISTINCT LEFT(M.Molecule, CHARINDEX(I.Output, M.Molecule) - 1) + I.Input + SUBSTRING(M.Molecule, CHARINDEX(I.Output, M.Molecule) + LEN(I.Output), LEN(M.Molecule)) AS NewMolecule
+    ,      @Iteration
+    FROM ##Molecule M
+    CROSS APPLY ##Instructions I 
+    WHERE CHARINDEX(I.Output, M.Molecule) > 0
     
-    --Transfer the molecules one step back
-    INSERT ##Results (Line, Counter)
-    SELECT DISTINCT REPLACE(Line, Output, Input) AS NewLine
-    ,      @Counter
-    FROM ##Results
-    CROSS APPLY ##Instructions
-    WHERE REPLACE(Line, Output, Input) NOT IN (SELECT Line FROM ##Results)
-      AND Counter = @Counter - 1
-
-    --Keep only the shortest results
-    DELETE ##Results
-    WHERE LEN(Line) > (SELECT MIN(LEN(Line)) FROM ##Results)
-
-    SET @Counter = @Counter + 1
-
-    PRINT CAST(@Counter AS VARCHAR(8)) + ' ' + CAST(GETDATE() AS VARCHAR(20))
+    DELETE FROM ##Molecule 
+    WHERE LEN(Molecule) > (SELECT MIN(LEN(Molecule)) FROM ##Molecule) -- Only keep the shortest one
 
 END
 
--- This does not work. You get stuck on a single result
+SELECT @Iteration AS Part2
 
-
---SELECT LEN(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(Line,N'n',''), N'a',''), 'i', ''), 'r', ''), 'h', ''), 'g', '')) FROM ##Results  --In total 277 elements
-SELECT LEN(Line) - LEN(REPLACE(Line, 'Ar', 'A')) FROM ##Results  -- 31 times Ar
-SELECT LEN(Line) - LEN(REPLACE(Line, 'Rn', 'R')) FROM ##Results  -- 31 times Rn
-SELECT LEN(Line) - LEN(REPLACE(Line, 'Y', '')) FROM ##Results  -- 8 times Y
-
-SELECT 277 - (31 + 31) - 2*8 - 1 
-
-;WITH cte_Cleaned AS (
-    SELECT REPLACE(REPLACE(REPLACE(Line, 'Ar', ''), 'Rn', ''), 'Y', '') Line FROM ##Results
-)
-SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(Line,N'n',''), N'a',''), 'i', ''), 'r', ''), 'h', ''), 'g', '') FROM cte_Cleaned
-
-
---SELECT DISTINCT SUBSTRING(Input, 2, 1) FROM ##Instructions
-SELECT * FROM ##Instructions
-SELECT * FROM ##Results
---100 is too low
---150 is too low
---198 is too high
-
---190 is incorrect
---197 is incorrect
---196 is incorrect
-
--- 195 is apparently correct
-
-/* 
-
-DROP TABLE ##Results
 DROP TABLE ##Instructions
-
-DROP TABLE ##Input
-
-
---https://www.reddit.com/r/adventofcode/comments/3xflz8/day_19_solutions/
-*/
-
-
-
+DROP TABLE ##Molecule
 
 
 
