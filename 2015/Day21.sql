@@ -1,4 +1,6 @@
 /*
+Items available in the shop
+
 Weapons:    Cost  Damage  Armor
 Dagger        8     4       0
 Shortsword   10     5       0
@@ -48,6 +50,7 @@ INSERT ##Items (Name, Type, Cost, Damage, Armor) VALUES
 CREATE TABLE ##Heroes (ID INT IDENTITY(1,1), Weapon VARCHAR(25), Armor VARCHAR(25), Ring1 VARCHAR(25), Ring2 VARCHAR(25), 
                        Cost INT, Damage INT, Defense INT, Wins INT)
 
+-- Create a list of all possible outfits. And calculate the damage and defense values
 ;WITH cte_Weapons AS (
     SELECT Name
     FROM ##Items
@@ -85,9 +88,10 @@ WHERE R1.Name <> R2.Name
 
 --SELECT * FROM ##Heroes
 
---Bereken aantal rondes dat de held nodig heeft
---Bereken aantal rondes dat de boss nodig heeft
---Vergelijk en trek je conclusie
+--The number of rounds to defeat the boss (or defeat the hero) are independent of eachother
+--So calculate the number of rounds the hero will need
+--And calculate the number of rounds the boss will need
+--The one with the least number of rounds will win (with ties going to the hero)
 
 DECLARE @PlayerHitPoints INT = 100
 DECLARE @MinimumDamage INT = 1
@@ -110,14 +114,9 @@ SET Wins =
 FROM ##Heroes
 
 
+SELECT TOP 1 Cost AS Part1 FROM ##Heroes WHERE Wins = 1 ORDER BY Cost
 
---SELECT * FROM ##Heroes WHERE Wins = 1 ORDER BY Cost
+SELECT TOP 1 Cost AS Part2 FROM ##Heroes WHERE Wins = 0 ORDER BY Cost DESC
 
---111 is correct for part 1
-
---SELECT * FROM ##Heroes WHERE Wins = 0 ORDER BY Cost DESC
-
---188 is correct for part 2
-
---DROP TABLE ##Heroes
---DROP TABLE ##Items
+DROP TABLE ##Heroes
+DROP TABLE ##Items
