@@ -3,92 +3,76 @@ DECLARE @Input INT = 29000000
 
 SET NOCOUNT ON
 
---SELECT @Input
+--Assumption: the number we're looking for is below 1 million
 
---CREATE TABLE ##Results (ID INT IDENTITY(1,1), HouseNr INT, NrOfPresents INT)
+SELECT TOP 1000000 ROW_Number() OVER (ORDER BY (SELECT 0)) AS Rn, 0 AS Part1, 0 AS Part2
+INTO ##Nrs
+FROM sys.messages T1
+CROSS APPLY sys.messages T2
 
---INSERT ##Results (HouseNr, NrOfPresents) SELECT TOP /*500000*/ 100 ROW_NUMBER() OVER (ORDER BY (SELECT 0)) /*+ 500000*/, 0 FROM sys.messages T1 --CROSS APPLY sys.messages T2
+DECLARE @Counter INT = 2
 
-DECLARE @ElfNr INT = 471200
-
-
-
-WHILE NOT EXISTS (SELECT 1 FROM ##Results WHERE NrOfPresents > @Input AND @ElfNr > HouseNr)
---WHILE @ElfNr < 10
+--And we assume the first 10 elves will all visit this number (i.e. the number is divisable by 2 through 10)
+WHILE @Counter <= 10
 BEGIN
+    DELETE FROM ##Nrs WHERE Rn % @Counter <> 0
 
-    UPDATE ##Results
-    SET NrOfPresents = NrOfPresents + 11 * @ElfNr
-    WHERE HouseNr % @ElfNr = 0 AND HouseNr <= @ElfNr * 50
-
-    SET @ElfNr = @ElfNr + 1
-
-    IF @ElfNr % 1000 = 0 PRINT CAST(@ElfNr AS VARCHAR(10)) + ' ' + CAST(GETDATE() AS VARCHAR(50))
-
+    SET @Counter = @Counter + 1
 END
 
 
-SELECT * FROM ##Results WHERE NrOfPresents > @Input
+-- Just 396 numbers left. We can calculate the number of presents they'll be getting
+--SELECT * FROM ##Nrs ORDER BY 1
 
+DECLARE @Number INT
+DECLARE @NrOfPresents INT
+DECLARE @NrOfPresents2 INT
+DECLARE @HalfWayPoint INT
+DECLARE NumberCursor CURSOR FOR SELECT Rn FROM ##Nrs
 
--- 942480 is too high for part 2
--- Elfs up to number 471200
--- 720720 is too high for part 2
--- 500000 is too low for part 2
--- 705600 is correct for part 2
+OPEN NumberCursor
 
--- 196560 is too low for part 1
+FETCH NEXT FROM NumberCursor INTO @Number
 
-/*
-
-DROP TABLE ##Results
-
-ID        HouseNr   NrOfPresents
-196560	196560	 8.332.800
-193120	393120	16.934.400
-
-*/
-
-
-/* Part 1
-DECLARE @Input INT = 29000000
-
---DECLARE @House BIGINT = 635000
-DECLARE @House BIGINT = 600000
-
---821000
-
-DECLARE @Elf BIGINT = 1
-
-DECLARE @NrPresents BIGINT = 0
-
-WHILE @NrPresents < @Input
+WHILE @@FETCH_STATUS = 0
 BEGIN
+    
+    SET @Counter = 1
+    SET @NrOfPresents = 0
+    SET @NrOfPresents2 = 0
+    SET @HalfWayPoint = FLOOR(SQRT(@Number))
 
-    SET @NrPresents = 0
-    SET @Elf = 1
-    SET @House = @House + 1
-
-    WHILE @Elf <= @House
+    WHILE @Counter < @HalfWayPoint
     BEGIN
-        
-        IF @House % @Elf = 0 SET @NrPresents = @NrPresents + (@Elf * 10)
 
-        SET @Elf = @Elf + 1
+        IF @Number % @Counter = 0
+        BEGIN
+            --Part 1
+            SET @NrOfPresents = @NrOfPresents + @Counter * 10
+            SET @NrOfPresents = @NrOfPresents + (@Number / @Counter) * 10
+
+            --Part 2
+            IF @Counter * 50 >= @Number SET @NrOfPresents2 = @NrOfPresents2 + @Counter * 11
+            IF (@Number / @Counter) * 50 >= @Number SET @NrOfPresents2 = @NrOfPresents2 + (@Number / @Counter) * 11
+        END
+
+        SET @Counter = @Counter + 1
 
     END
 
-    IF @House % 1000 = 0 PRINT CAST(GETDATE() AS VARCHAR(50)) + ' House:' + CAST(@House AS VARCHAR(10)) + ' Presents:' + CAST(@NrPresents AS VARCHAR(10))
+    UPDATE ##Nrs 
+    SET Part1 = @NrOfPresents 
+    ,   Part2 = @NrOfPresents2
+    WHERE Rn = @Number
+
+    FETCH NEXT FROM NumberCursor INTO @Number
 
 END
 
-PRINT CAST(GETDATE() AS VARCHAR(50)) + ' House:' + CAST(@House AS VARCHAR(10)) + ' Presents:' + CAST(@NrPresents AS VARCHAR(10))
+CLOSE NumberCursor
+DEALLOCATE NumberCursor
 
+SELECT TOP 1 Rn As Part1 FROM ##Nrs WHERE Part1 > @Input ORDER BY Rn
+SELECT TOP 1 Rn As Part2 FROM ##Nrs WHERE Part2 > @Input ORDER BY Rn
 
---1004640 is too high for part 1
--- 999600 is too high for part 1
--- 887040 is incorrect Presents:29393280
--- 800280 Presents:30492000
-
---665280 is correct for part 1
-*/
+DROP TABLE ##Nrs
