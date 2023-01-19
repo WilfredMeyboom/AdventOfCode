@@ -2,14 +2,15 @@ use Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2015'
+DECLARE @day VARCHAR(2)  = '23'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2015\input23.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day 
+
 
 CREATE TABLE ##Register (ID BIGINT IDENTITY(1,1), RegName CHAR, RegValue BIGINT)
-INSERT ##Register (RegName, RegValue) VALUES ('a', 1), ('b',0)
+INSERT ##Register (RegName, RegValue) VALUES ('a', 0), ('b',0)
 
 CREATE TABLE ##Instructions (ID BIGINT IDENTITY(1,1), InstrNr BIGINT, Instr CHAR(3), InstrReg VARCHAR(3), InstrCount VARCHAR(3))
 
@@ -27,6 +28,17 @@ SELECT ROW_NUMBER() OVER (ORDER BY (SELECT 0))
 --,* 
 FROM ##Input
 
+
+/*
+
+    hlf r sets register r to half its current value, then continues with the next instruction.
+    tpl r sets register r to triple its current value, then continues with the next instruction.
+    inc r increments register r, adding 1 to it, then continues with the next instruction.
+    jmp offset is a jump; it continues with the instruction offset away relative to itself.
+    jie r, offset is like jmp, but only jumps if register r is even ("jump if even").
+    jio r, offset is like jmp, but only jumps if register r is 1 ("jump if one", not odd).
+
+*/
 
 DECLARE @InstrPointer BIGINT = 1
 DECLARE @MaxInstr BIGINT
@@ -65,36 +77,53 @@ BEGIN
 
     SET @Counter = @Counter + 1
 
-    IF @Counter % 100 = 0 PRINT CAST(@Counter AS VARCHAR(10)) + ' ' + @Instr + ' ' + @InstrReg + ' ' + ISNULL(@InstrCount, '')
+END
 
-    --SELECT @Counter, @InstrPointer, @Instr, @InstrReg, @InstrCount, RegName, RegValue FROM ##Register
+SELECT RegValue AS Part1 FROM ##Register WHERE RegName = 'b'
+
+
+-- Reset for part 2
+
+SET @InstrPointer = 1
+SET @Counter = 0
+
+TRUNCATE TABLE ##Register
+INSERT ##Register (RegName, RegValue) VALUES ('a', 1), ('b',0)
+
+
+WHILE @InstrPointer > 0 AND @InstrPointer <= @MaxInstr
+BEGIN
+
+    SELECT @Instr = Instr
+    ,      @InstrReg = InstrReg
+    ,      @InstrCount = InstrCount
+    FROM ##Instructions
+    WHERE InstrNr = @InstrPointer
+
+    UPDATE ##Register
+    SET RegValue = CASE WHEN @Instr = 'hlf' THEN RegValue / 2
+                        WHEN @Instr = 'tpl' THEN RegValue * 3
+                        WHEN @Instr = 'inc' THEN RegValue + 1
+                        ELSE RegValue END
+    ,   @InstrPointer = CASE WHEN (@Instr = 'jie' AND RegValue % 2 = 0)
+                               OR (@Instr = 'jio' AND RegValue = 1)
+                             THEN @InstrPointer + @InstrCount - 1
+                             ELSE @InstrPointer END
+    WHERE RegName = @InstrReg
+
+    IF @Instr = 'jmp' SET @InstrPointer = @InstrPointer + @InstrReg - 1
+
+    SET @InstrPointer = @InstrPointer + 1
+
+    SET @Counter = @Counter + 1
 
 END
 
 
-SELECT * FROM ##Register
-SELECT * FROM ##Instructions
 
---271148293 is too high for part 1
---4591 is too high for part 1
---170 is correct for part 1
---247 is correct for part 2
+SELECT RegValue AS Part2 FROM ##Register WHERE RegName = 'b'
 
-/*
 
-DROP TABLE ##Input
+
 DROP TABLE ##Register
 DROP TABLE ##Instructions
-
-    hlf r sets register r to half its current value, then continues with the next instruction.
-    tpl r sets register r to triple its current value, then continues with the next instruction.
-    inc r increments register r, adding 1 to it, then continues with the next instruction.
-    jmp offset is a jump; it continues with the instruction offset away relative to itself.
-    jie r, offset is like jmp, but only jumps if register r is even ("jump if even").
-    jio r, offset is like jmp, but only jumps if register r is 1 ("jump if one", not odd).
-
-
-*/
-
-
-
