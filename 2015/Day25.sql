@@ -1,5 +1,6 @@
 DECLARE @StartCode BIGINT = 20151125
 
+-- According to puzzle input
 DECLARE @TargetPosX INT = 3019
 DECLARE @TargetPosY INT = 3010
 
@@ -25,13 +26,8 @@ BEGIN
 
     SET @Code = (@Code * @Factor) % @Divider
 
-
-    --PRINT 'X: ' + CAST(@PosX AS VARCHAR(6)) + ', Y: ' + CAST(@PosY AS VARCHAR(6)) + ', Code: ' + CAST(@Code AS VARCHAR(10))
-
 END
 
 
-PRINT 'X: ' + CAST(@PosX AS VARCHAR(6)) + ', Y: ' + CAST(@PosY AS VARCHAR(6)) + ', Code: ' + CAST(@Code AS VARCHAR(10))
+SELECT CAST(@Code AS VARCHAR(10)) AS Part1
 
---26300009 is too high for part 1
---X: 3019, Y: 3010, Code: 8997277 -- is correct for part 1
