@@ -2,33 +2,23 @@ use Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2016'
+DECLARE @day VARCHAR(2)  = '1'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2016\input01.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day 
 
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputSplit
 --SELECT * FROM ##Input
 
 CREATE TABLE ##Directions (ID INT IDENTITY(1,1), SequenceNr INT, Turn CHAR(1), Dist INT)
 
-;WITH cte_Directions AS (
-    SELECT LTRIM(RTRIM(LEFT(Line, CHARINDEX(',', Line) - 1))) AS Direction
-    ,      SUBSTRING(Line, CHARINDEX(',', Line) + 1, LEN(Line)) + ',' AS Remainder
-    ,      1 AS SequenceNr
-    FROM ##Input 
-    UNION ALL
-    SELECT LTRIM(RTRIM(LEFT(Remainder, CHARINDEX(',', Remainder) - 1))) AS Direction
-    ,      SUBSTRING(Remainder, CHARINDEX(',', Remainder) + 1, LEN(Remainder)) AS Remainder
-    ,      SequenceNr + 1
-    FROM cte_Directions
-    WHERE LEN(Remainder) > 0
-)
 INSERT ##Directions (SequenceNr, Turn, Dist)
-SELECT SequenceNr
-,      LEFT(Direction, 1)
-,      CAST(SUBSTRING(Direction, 2, LEN(Direction)) AS INT)
-FROM cte_Directions OPTION (MAXRECURSION 10000)
+SELECT PieceNr, LEFT(Piece,1), SUBSTRING(Piece, 2, LEN(Piece))
+FROM ##InputSplit
 
 
 --SELECT * FROM ##Directions
@@ -64,27 +54,31 @@ BEGIN
 
 END
 
---SELECT 61 + 85
+SELECT X + Y AS Part1 FROM ##Positions WHERE ID IN (SELECT MAX(ID) FROM ##Positions)
 
-/*
+
+
+;WITH cte_HorizontalLines AS (
+    SELECT P1.ID
+    , P1.X
+    , CASE WHEN P1.Y < P2.Y THEN P1.Y ELSE P2.Y END AS Y1
+    , CASE WHEN P1.Y < P2.Y THEN P2.Y ELSE P1.Y END AS Y2
+    FROM ##Positions P1
+    INNER JOIN ##Positions P2 ON P1.ID = P2.ID - 1 AND P1.X = P2.X
+), cte_VerticalLines AS (
+    SELECT P1.ID
+    , P1.Y
+    , CASE WHEN P1.X < P2.X THEN P1.X ELSE P2.X END AS X1
+    , CASE WHEN P1.X < P2.X THEN P2.X ELSE P1.X END AS X2
+    FROM ##Positions P1
+    INNER JOIN ##Positions P2 ON P1.ID = P2.ID - 1 AND P1.Y = P2.Y
+)
+SELECT TOP 1 ABS(H.X) + ABS(V.Y) AS Part2
+FROM cte_HorizontalLines H
+INNER JOIN cte_VerticalLines V ON H.X BETWEEN V.X1 + 1 AND V.X2 - 1 AND V.Y BETWEEN H.Y1 + 1 AND H.Y2 - 1 -- Disregard the corners
+ORDER BY CASE WHEN H.ID < V.ID THEN H.ID ELSE V.ID END
+
 
 DROP TABLE ##Directions
-DROP TABLE ##Input
+DROP TABLE ##Positions
 
-*/
-
---SELECT * 
---FROM ##Positions P1 
---INNER JOIN ##Positions P2 ON P1.X = P2.X AND P1.Y = P2.Y AND P1.ID < P2.ID
-
---184 is wrong for part 2
-
---Visualisatie met excel geeft 2 lijnen die elkaar kruisen
--- (-34,4) - (-34, 198)
--- (-94, 97) - (97,97)
-
---> -34,97
-
-SELECT 34+97
-
---131 is correct for part 2
