@@ -2,89 +2,81 @@ use Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2016'
+DECLARE @day VARCHAR(2)  = '4'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2016\input04.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day, @SplitCustom = '-[]' 
 
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputSplit
+--SELECT * FROM ##Input
 
-CREATE TABLE ##Rooms (ID INT IDENTITY(1,1), RoomNr INT, RoomID VARCHAR(100), SectorID INT, Checksum VARCHAR(10))
-
-INSERT ##Rooms (RoomNr, RoomID, SectorID, Checksum)
-SELECT ROW_NUMBER() OVER (ORDER BY (SELECT 0)) AS RoomNr
-,      SUBSTRING(Line, 1, LEN(Line) - CHARINDEX('-', REVERSE(Line))) AS RoomID
-,      REVERSE(LEFT(REVERSE(SUBSTRING(Line, 1, CHARINDEX('[', Line) - 1)), CHARINDEX('-', REVERSE(SUBSTRING(Line, 1, CHARINDEX('[', Line) - 1))) - 1)) AS SectorID
-,      SUBSTRING(Line, CHARINDEX('[', Line) + 1, CHARINDEX(']', Line) - CHARINDEX('[', Line) - 1) AS Checksum     
-FROM ##Input
-
-;WITH cte_Letters AS (
-    SELECT RoomNr
-    ,      1 AS LetterNr
-    ,      LEFT(RoomID, 1) AS Letter
-    ,      SUBSTRING(RoomID, 2, LEN(RoomID)) AS Remainder
-    FROM ##Rooms
-    UNION ALL
-    SELECT RoomNr
-    ,      LetterNr + 1
-    ,      LEFT(Remainder, 1) AS Letter
-    ,      SUBSTRING(Remainder, 2, LEN(Remainder)) AS Remainder
-    FROM cte_Letters
-    WHERE LEN(Remainder) > 0
-), cte_Top5 AS (
-    SELECT RoomNr, Letter, COUNT(1) AS Amount, ROW_NUMBER() OVER (PARTITION BY RoomNr ORDER BY RoomNr, COUNT(1) DESC, Letter) AS Top5
-    FROM cte_Letters
-    WHERE Letter <> '-'
-    GROUP BY RoomNr, Letter
-), cte_Comparision AS (
-    SELECT L1.RoomNr
-    ,      L1.Letter + L2.Letter + L3.Letter + L4.Letter + L5.Letter AS RealChecksum
-    ,      R.Checksum 
-    ,      CASE WHEN L1.Letter + L2.Letter + L3.Letter + L4.Letter + L5.Letter = R.Checksum THEN SectorID ELSE 0 END AS RealRoom
-    FROM cte_Top5 L1
-    INNER JOIN cte_Top5 L2 ON L1.RoomNr = L2.RoomNr AND L1.Top5 = L2.Top5 - 1
-    INNER JOIN cte_Top5 L3 ON L2.RoomNr = L3.RoomNr AND L2.Top5 = L3.Top5 - 1
-    INNER JOIN cte_Top5 L4 ON L3.RoomNr = L4.RoomNr AND L3.Top5 = L4.Top5 - 1
-    INNER JOIN cte_Top5 L5 ON L4.RoomNr = L5.RoomNr AND L4.Top5 = L5.Top5 - 1
-    INNER JOIN ##Rooms R ON L1.RoomNr = R.RoomNr
-    WHERE L1.Top5 = 1
+;WITH cte_checksums AS (
+    SELECT RowNr, ColNr FROM ##InputGrid WHERE Val = '['
+), cte_calculatedChecksums AS (
+    SELECT RowNr, [1] + [2] + [3] + [4] + [5] AS CalcChecksum
+    FROM (
+        SELECT I.RowNr, I.Val, ROW_NUMBER() OVER (PARTITION BY I.RowNr ORDER BY COUNT(1) DESC, I.Val) AS RN
+        FROM ##InputGrid I 
+        INNER JOIN cte_checksums c ON I.RowNr = c.RowNr
+        WHERE ASCII(I.Val) BETWEEN 97 AND 122
+        GROUP BY I.RowNr, I.Val 
+    ) T
+    PIVOT (
+        MAX(Val) FOR RN IN ([1],[2],[3],[4],[5])
+    ) PVT
 )
-SELECT SUM(RealRoom) FROM cte_Comparision
+SELECT SUM(
+        CASE WHEN c.CalcChecksum = I2.Piece 
+             THEN CAST(REVERSE(LEFT(REVERSE(I1.Piece), CHARINDEX('-', REVERSE(I1.Piece)) - 1)) AS INT)
+             ELSE 0 
+        END) AS Part1
+FROM cte_calculatedChecksums c
+INNER JOIN ##InputSplit I2 ON c.RowNr = I2.RowNr -1 AND I2.PieceNr = 2
+INNER JOIN ##InputSplit I1 ON c.RowNr = I1.RowNr -1 AND I1.PieceNr = 1
 
---173787 Is correct for part 1
 
+CREATE TABLE ##Results (Sentence VARCHAR(MAX), SectorID INT)
 
-;WITH cte_Letters AS (
-    SELECT RoomNr
-    ,      1 AS LetterNr
-    ,      LEFT(RoomID, 1) AS Letter
-    ,      SUBSTRING(RoomID, 2, LEN(RoomID)) AS Remainder
-    ,      SectorID
-    FROM ##Rooms
+;WITH cte_SectorIDs AS (
+    SELECT RowNr, CAST(Piece AS INT) AS SectorID FROM ##InputSplitCust WHERE TRY_CAST(Piece AS INT) IS NOT NULL 
+), cte_MaxCols AS (
+    SELECT RowNr, MAX(ColNr) MaxColNr FROM ##InputGrid GROUP BY RowNr
+), cte_PerLetter AS (
+    SELECT I.RowNr, I.ColNr, c.SectorID
+    ,      CASE WHEN Val = '-' THEN ' '
+                WHEN ASCII(Val) + SectorID % 26 > 122 THEN CHAR(ASCII(Val) + SectorID % 26 - 26) ELSE CHAR(ASCII(Val) + SectorID % 26) END AS RotatedLetter
+    FROM ##InputGrid I
+    INNER JOIN cte_SectorIDs c ON I.RowNr = c.RowNr - 1
+), cte_Sentences AS (
+    SELECT RowNr,
+           ColNr,
+           CAST(RotatedLetter AS VARCHAR(200)) AS Sentence,
+           SectorID
+    FROM cte_PerLetter
+    WHERE ColNr = 0
+
     UNION ALL
-    SELECT RoomNr
-    ,      LetterNr + 1
-    ,      LEFT(Remainder, 1) AS Letter
-    ,      SUBSTRING(Remainder, 2, LEN(Remainder)) AS Remainder
-    ,      SectorID
-    FROM cte_Letters
-    WHERE LEN(Remainder) > 0
-)--, cte_Corrected AS (
-SELECT RoomNr, Letter, LetterNr
-,      CASE WHEN Letter = '-' THEN ' '
-            WHEN ASCII(Letter) + SectorID % 26 > 122 THEN CHAR(ASCII(Letter) + SectorID % 26 - 26) ELSE CHAR(ASCII(Letter) + SectorID % 26) END AS RotatedLetter
-FROM cte_Letters
-WHERE RoomNr = 300
-ORDER BY RoomNr, LetterNr
---)
---SELECT * FROM cte_Corrected WHERE RotatedLetter = 'n' AND LetterNr = 1
 
-SELECT * FROM ##Rooms WHERE RoomNr = 300
+    SELECT cS.RowNr,
+           cPL.ColNr,
+           CAST(Sentence + ISNULL(RotatedLetter, '') AS VARCHAR(200)),
+           cS.SectorID
+    FROM cte_Sentences cS
+    INNER JOIN cte_PerLetter cPL ON cS.RowNr = cPL.RowNr AND cS.ColNr = cPL.ColNr - 1
+)
+INSERT ##Results (Sentence, SectorID)
+SELECT Sentence, SectorID
+FROM cte_Sentences c
+INNER JOIN cte_MaxCols S ON c.ColNr = S.MaxColNr AND c.RowNr = S.RowNr
 
-/*
+-- Because there are some interesting names in there
+SELECT * FROM ##Results ORDER BY SectorID
 
-DROP TABLE ##Rooms
-DROP TABLE ##Input
+SELECT SectorID AS Part2 FROM ##Results WHERE Sentence LIKE '%North%'
 
-*/
+DROP TABLE ##Results
 

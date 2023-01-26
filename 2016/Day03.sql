@@ -2,64 +2,40 @@ use Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2016'
+DECLARE @day VARCHAR(2)  = '3'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2016\input03.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day 
 
-CREATE TABLE ##Triangles (ID INT IDENTITY(1,1), Side1 INT, Side2 INT, Side3 INT)
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputSplit
+--SELECT * FROM ##Input
 
-;WITH cte_Trimmed AS (
-    SELECT LTRIM(RTRIM(Line)) AS Line
-    FROM ##Input
-), cte_FirstSplit AS (
-    SELECT LEFT(Line, CHARINDEX(' ', Line) -1 ) AS FirstNr
-    ,      LTRIM(SUBSTRING(Line, CHARINDEX(' ', Line) + 1, LEN(Line))) AS Remainder
-    , Line
-    FROM cte_Trimmed
-)
-INSERT ##Triangles (Side1, Side2, Side3)
-SELECT FirstNr
-,      LEFT(Remainder, CHARINDEX(' ', Remainder) -1 ) AS SecondNr
-,      SUBSTRING(Remainder, CHARINDEX(' ', Remainder) + 1, LEN(Line)) AS ThirdNr
-FROM cte_FirstSplit
+SELECT COUNT(1) AS Part1
+FROM (
+    SELECT RowNr, PieceNr, Piece
+    FROM ##InputSplit
+    ) T
+PIVOT (
+    MAX(Piece) FOR PieceNr IN ([1],[2],[3])
+    ) Pvt
+WHERE CAST([1] AS INT) + CAST([2] AS INT) > CAST([3] AS INT)
+  AND CAST([1] AS INT) + CAST([3] AS INT) > CAST([2] AS INT)
+  AND CAST([2] AS INT) + CAST([3] AS INT) > CAST([1] AS INT)
 
 
-
-SELECT COUNT(1) FROM ##Triangles WHERE Side1 + Side2 > Side3 AND Side1 + Side3 > Side2 AND Side2 + Side3 > Side1
---253 is wrong
---770 is too low
---862 Correct for part 1
-
-;WITH cte_Sides AS (
-    SELECT Side1 AS Side FROM ##Triangles 
-    UNION ALL
-    SELECT Side2 FROM ##Triangles 
-    UNION ALL
-    SELECT Side3 FROM ##Triangles 
-), cte_TriangleSides AS (
-    SELECT (ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1) / 3 AS TriangleNr
-    ,      (ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1) % 3 AS SideNr
-    ,      Side
-    FROM cte_Sides
-), cte_Triangles AS (
-    SELECT S1.TriangleNr, S1.Side AS Side1, S2.Side AS Side2, S3.Side AS Side3
-    FROM cte_TriangleSides S1
-    INNER JOIN cte_TriangleSides S2 ON S1.TriangleNr = S2.TriangleNr
-    INNER JOIN cte_TriangleSides S3 ON S2.TriangleNr = S3.TriangleNr
-    WHERE S1.SideNr = 0
-      AND S2.SideNr = 1
-      AND S3.SideNr = 2
-)
-SELECT COUNT(1) FROM cte_Triangles WHERE Side1 + Side2 > Side3 AND Side1 + Side3 > Side2 AND Side2 + Side3 > Side1
-
---1577 is correct for part 2
-
-/*
-
-DROP TABLE ##Triangles
-DROP TABLE ##Input
-
-*/
+SELECT COUNT(1) AS Part2
+FROM (
+    SELECT 3*((RowNr-1) / 3) + PieceNr AS NewRowNr, RowNr % 3 + 1 AS NewPieceNr, Piece
+    FROM ##InputSplit
+    ) T
+PIVOT (
+    MAX(Piece) FOR NewPieceNr IN ([1],[2],[3])
+    ) Pvt
+WHERE CAST([1] AS INT) + CAST([2] AS INT) > CAST([3] AS INT)
+  AND CAST([1] AS INT) + CAST([3] AS INT) > CAST([2] AS INT)
+  AND CAST([2] AS INT) + CAST([3] AS INT) > CAST([1] AS INT)
 
