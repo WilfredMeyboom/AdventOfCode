@@ -1,12 +1,18 @@
-use Test_WME
+USE Test_WME
 
 SET NOCOUNT ON
 
-CREATE TABLE ##Input (Line NVARCHAR(MAX));
+DECLARE @year VARCHAR(4) = '2016'
+DECLARE @day VARCHAR(2)  = '8'
 
-BULK INSERT ##Input
-FROM 'D:\Wilfred\AdventOfCode\2016\input08.txt'
-WITH (ROWTERMINATOR = '0x0A');
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day
+
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputSplit
+--SELECT * FROM ##Input
 
 CREATE TABLE ##Instructions (ID INT IDENTITY(1,1), InstrNr INT, Instr VARCHAR(10), Int1 INT, Int2 INT)
 
@@ -33,10 +39,6 @@ SELECT X, Y, 0 FROM
 CROSS APPLY
 (SELECT TOP (50) ROW_NUMBER() OVER (ORDER BY (SELECT 0)) - 1 AS X FROM sys.messages) SubX
 
-
-
---SELECT * FROM ##Instructions
---SELECT * FROM ##Grid
 
 DECLARE @Instr VARCHAR(10)
 DECLARE @Int1 INT
@@ -87,8 +89,12 @@ END
 CLOSE InstrCursor
 DEALLOCATE InstrCursor
 
-SELECT SUM(Pixel) FROM ##Grid
-
+DECLARE @Part1 INT
+SELECT @Part1 = SUM(Pixel) FROM ##Grid
+PRINT 'Part1: ' + CAST(@Part1 AS VARCHAR(5))
+PRINT ''
+PRINT 'Part2:'
+PRINT ''
 
 DECLARE @X INT
 DECLARE @Y INT
@@ -108,7 +114,7 @@ BEGIN
     WHILE (@X <= @MaxX)
     BEGIN
     
-        SELECT @Str = @Str + CASE WHEN Pixel = 1 THEN '*' ELSE '.' END
+        SELECT @Str = @Str + CASE WHEN Pixel = 1 THEN '@@' ELSE '  ' END
         FROM ##Grid G
         WHERE G.X = @X AND G.Y = @Y       
 
@@ -125,22 +131,5 @@ BEGIN
 END
 
 
-
-
-
-/*
-
 DROP TABLE ##Grid
 DROP TABLE ##Instructions
-DROP TABLE ##Input
-
-*/
-
---SELECT * FROM ##Input
-
-
---116 is correct for part 1
-
---UPOJFLBCEZ is correct for part 2
-
-
