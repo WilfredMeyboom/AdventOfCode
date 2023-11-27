@@ -1,558 +1,302 @@
+USE Test_WME
+
 SET NOCOUNT ON
 
-/*
-The first floor contains a strontium generator, a strontium-compatible microchip, a plutonium generator, and a plutonium-compatible microchip.
-The second floor contains a thulium generator, a ruthenium generator, a ruthenium-compatible microchip, a curium generator, and a curium-compatible microchip.
-The third floor contains a thulium-compatible microchip.
-The fourth floor contains nothing relevant.
-*/
-
-/*
-CREATE TABLE ##Items (ID INT IDENTITY(1,1), Step INT, Attempt INT, PreviousAttempt INT, Item VARCHAR(10), Position INT, IsValid BIT, ElevatorPos INT)
-CREATE TABLE ##ItemsToBe (ID INT IDENTITY(1,1), Step INT, Attempt INT, PreviousAttempt INT, Item VARCHAR(10), Position INT, IsValid BIT, ElevatorPos INT)
-
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Sr-Gen', 1, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Sr-Chp', 1, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Th-Gen', 2, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Th-Chp', 3, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Pl-Gen', 1, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Pl-Chp', 1, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Ru-Gen', 2, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Ru-Chp', 2, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Cm-Gen', 2, 1, 1)
-INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Cm-Chp', 2, 1, 1)
-
-
---TRUNCATE TABLE ##Items
-
---INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Li-Gen', 3, 1, 1)
---INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'Li-Chp', 1, 1, 1)
---INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'He-Gen', 2, 1, 1)
---INSERT ##Items (Step, Attempt, Item, Position, IsValid, ElevatorPos) VALUES (0, 0, 'He-Chp', 1, 1, 1)
-
-
---SELECT * FROM ##Items
-
-
-/*
-In Psuedo
-
-Loop
-    Pak alle valid step-attempt combi's
-    Kijk welke mogelijkheden er zijn (voor het verplaatsen van 1 of 2 items
-    Loop over alle nieuwe combinaties
-        Zijn deze valide?
-        Bestaat al met een lagere step?
-    Kijk of een tak doodloopt
-    Kijk of alles op 4 ligt
-*/
-
-DECLARE @AllOnFour BIT = 0
-
-DECLARE @Step INT
-DECLARE @Attempt INT
-DECLARE @Item VARCHAR(10)
-DECLARE @Item2 VARCHAR(10)
-DECLARE @CurrentAttempt INT = 0
-DECLARE @Counter INT = 0
-DECLARE @Target INT
-
-SELECT @Target = COUNT(1) FROM ##Items
-
-WHILE @AllOnFour = 0 AND @Counter < 500
-BEGIN
-
-    SET @Counter = @Counter + 1
-
-    DELETE FROM ##ItemsToBe
---    SET @CurrentAttempt = 0
-
-    --Move 1 item 1 step (up or down)
-    DECLARE SingleTransport CURSOR FAST_FORWARD FOR SELECT Step, Attempt, Item FROM ##Items WHERE IsValid = 1 AND Position = ElevatorPos
-    OPEN SingleTransport
-    FETCH NEXT FROM SingleTransport INTO @Step, @Attempt, @Item
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-
-        SET @CurrentAttempt = @CurrentAttempt + 1
-
-        --Move 1 item 1 step up
-        INSERT ##ItemsToBe (Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos)
-        SELECT Step + 1
-        ,      @CurrentAttempt
-        ,      Attempt
-        ,      Item
-        ,      CASE WHEN Item = @Item THEN Position + 1 ELSE Position END
-        ,      IsValid = 1
-        ,      ElevatorPos + 1
-        FROM ##Items
-        WHERE Step = @Step AND Attempt = @Attempt
-
-        SET @CurrentAttempt = @CurrentAttempt + 1
-
-        --Move 1 item 1 step down
-        INSERT ##ItemsToBe (Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos)
-        SELECT Step + 1
-        ,      @CurrentAttempt
-        ,      Attempt
-        ,      Item
-        ,      CASE WHEN Item = @Item THEN Position - 1 ELSE Position END
-        ,      IsValid = 1
-        ,      ElevatorPos - 1
-        FROM ##Items
-        WHERE Step = @Step AND Attempt = @Attempt
-
-        FETCH NEXT FROM SingleTransport INTO @Step, @Attempt, @Item
-
-    END
-
-    CLOSE SingleTransport
-    DEALLOCATE SingleTransport
-
-
-    -- Move 2 items one step (up or down)
-    DECLARE DoubleTransport CURSOR FAST_FORWARD FOR SELECT I1.Step, I1.Attempt, I1.Item, I2.Item
-                                                    FROM ##Items I1
-                                                    INNER JOIN ##Items I2 ON I1.Step = I2.Step AND I1.Attempt = I2.Attempt AND I1.Position = I2.Position AND I1.Item < I2.Item
-                                                    WHERE I1.IsValid = 1 AND I1.Position = I1.ElevatorPos
-    OPEN DoubleTransport
-    FETCH NEXT FROM DoubleTransport INTO @Step, @Attempt, @Item, @Item2
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-
-        SET @CurrentAttempt = @CurrentAttempt + 1
-
-        --Move 1 item 1 step up
-        INSERT ##ItemsToBe (Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos)
-        SELECT Step + 1
-        ,      @CurrentAttempt
-        ,      Attempt
-        ,      Item
-        ,      CASE WHEN Item = @Item OR Item = @Item2 THEN Position + 1 ELSE Position END
-        ,      IsValid = 1
-        ,      ElevatorPos + 1
-        FROM ##Items
-        WHERE Step = @Step AND Attempt = @Attempt
-
-        SET @CurrentAttempt = @CurrentAttempt + 1
-
-        --Move 1 item 1 step down
-        INSERT ##ItemsToBe (Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos)
-        SELECT Step + 1
-        ,      @CurrentAttempt
-        ,      Attempt
-        ,      Item
-        ,      CASE WHEN Item = @Item OR Item = @Item2  THEN Position - 1 ELSE Position END
-        ,      IsValid = 1
-        ,      ElevatorPos - 1
-        FROM ##Items
-        WHERE Step = @Step AND Attempt = @Attempt
-
-        FETCH NEXT FROM DoubleTransport INTO @Step, @Attempt, @Item, @Item2
-
-    END
-
-    CLOSE DoubleTransport
-    DEALLOCATE DoubleTransport
-
-
-    -- Did we move something outside the building? ;)
-    ;WITH cte_Invalid AS (
-        SELECT DISTINCT Step, Attempt
-        FROM ##ItemsToBe
-        WHERE Position NOT BETWEEN 1 AND 4
-    )
-    DELETE ITB
-    FROM ##ItemsToBe ITB
-    INNER JOIN cte_Invalid cI ON cI.Step = ITB.Step AND cI.Attempt = ITB.Attempt
-
-    -- Do we have radiated unprotected chips?
-    ;WITH cte_Invalid AS (
-        SELECT ITB_Gen.Step, ITB_Gen.Attempt
-        FROM ##ItemsToBe ITB_Gen
-        INNER JOIN ##ItemsToBe ITB_Chp ON ITB_Gen.Step = ITB_Chp.Step
-                                      AND ITB_Gen.Attempt = ITB_Chp.Attempt
-                                      AND ITB_Gen.Position = ITB_Chp.Position
-                                      AND RIGHT(ITB_Chp.Item, 3) = 'Chp'
-                                      AND LEFT(ITB_Gen.Item, 2) <> LEFT(ITB_Chp.Item, 2)
-        LEFT JOIN ##ItemsToBe ITB_GC ON ITB_Gen.Step = ITB_GC.Step
-                                    AND ITB_Gen.Attempt = ITB_GC.Attempt
-                                    AND ITB_Gen.Position = ITB_GC.Position
-                                    AND RIGHT(ITB_GC.Item, 3) = 'Gen'
-                                    AND LEFT(ITB_GC.Item, 2) = LEFT(ITB_Chp.Item, 2)
-        WHERE RIGHT(ITB_Gen.Item, 3) = 'Gen'
-        AND ITB_GC.ID IS NULL
-    )
-    DELETE ITB
-    FROM ##ItemsToBe ITB
-    INNER JOIN cte_Invalid cI ON cI.Step = ITB.Step AND cI.Attempt = ITB.Attempt
-
-    -- Have we already seen this exact situation?
-    ;WITH cte_Duplicate AS (
-        SELECT DISTINCT ITB.Step, ITB.Attempt
-        FROM ##ItemsToBe ITB
-        INNER JOIN ##Items I ON ITB.ElevatorPos = I.ElevatorPos
-                            AND ITB.Item = I.Item
-                            AND ITB.Position = I.Position
-        GROUP BY I.Step, I.Attempt, ITB.Step, ITB.Attempt
-        HAVING COUNT(1) % @Target = 0
-    )
-    DELETE ITB
-    FROM ##ItemsToBe ITB
-    INNER JOIN cte_Duplicate cD ON ITB.Step = cD.Step AND ITB.Attempt = cD.Attempt
-
-
-    UPDATE ##Items SET IsValid = 0
-
-    INSERT ##Items (Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos) SELECT Step, Attempt, PreviousAttempt, Item, Position, IsValid, ElevatorPos FROM ##ItemsToBe
-
-    IF (SELECT TOP(1) COUNT(1) FROM ##Items WHERE Position = 4 GROUP BY Step, Attempt ORDER BY 1 DESC) = @Target SET @AllOnFour = 1
-
-    IF (@Counter % 50) = 0 SELECT * FROM ##Items
-
-    PRINT 'Step ' + CAST(@Counter AS VARCHAR(10)) + ' at ' + CAST(GETDATE() AS VARCHAR(50))
-
-END
-
-PRINT @Counter
-
-/*
---DROP TABLE ##Building
-DROP TABLE ##Items
-DROP TABLE ##ItemsToBe
-*/
-
-
-/*
-SELECT * 
-FROM ##Items I1
-INNER JOIN ##Items I2 ON I1.Step = I2.Step -1 AND I1.Attempt = I2.PreviousAttempt AND I1.Item = I2.Item
-WHERE I1.Step = 2
-
-SELECT * 
-FROM ##Items I1
-INNER JOIN ##Items I2 ON I1.Step = I2.Step -1 AND I1.Attempt = I2.PreviousAttempt AND I1.Item = I2.Item
-WHERE I1.Step = 3 AND I1.PreviousAttempt = 4
-
-
-SELECT Step, COUNT(1) FROM ##Items GROUP BY Step ORDER BY Step
-
-SELECT * FROM ##Items WHERE Attempt = 7
-SELECT * FROM ##Items WHERE Attempt = 13
-SELECT * FROM ##Items WHERE PreviousAttempt = 13
-
---INSERT ##ItemsToBe (Step, Attempt, PreviousAttempt, Item, Position, ElevatorPos)
---SELECT Step, Attempt, PreviousAttempt, Item, Position, ElevatorPos FROM ##Items WHERE Attempt = 32
-
---DELETE FROM ##ItemsToBe
-
-SELECT * FROM ##ItemsToBe WHERE PreviousAttempt = 13
-
-        SELECT DISTINCT ITB.Step, ITB.Attempt
-        FROM ##ItemsToBe ITB
-        INNER JOIN ##Items I ON ITB.ElevatorPos = I.ElevatorPos
-                            AND ITB.Item = I.Item
-                            AND ITB.Position = I.Position
-                            AND ITB.Attempt > I.Attempt
-WHERE ITB.Attempt = 32
-        GROUP BY I.Step, I.Attempt, ITB.Step, ITB.Attempt
-        HAVING COUNT(1) = @Target
-
-
-*/
-
-
-SELECT * FROM ##ItemsToBe
-SELECT * FROM ##Items
-*/
-
-
-/*
-Een alternatieve methode zou zijn om alle mogelijke situaties te plotten (dit zijn er 4.194.304).
-Deze vervolgens te filteren op alles wat legaal is
-En vervolgens het minimale aantal stappen tot elke situatie te bepalen 
-Je kan dan per situatie een code bepalen zodat je makkelijker kan vergelijken
-
-
-*/
-
-
-
-
-CREATE TABLE ##Building (ID BIGINT IDENTITY(1,1), Step INT, SR_Gen INT, SR_Chip INT, PL_Gen INT, PL_Chip INT, TM_Gen INT, TM_Chip INT, RU_Gen INT, RU_Chip INT, CM_Gen INT, CM_Chip INT, Elevator INT, Code BIGINT)
-
-
-;WITH cte_Floors AS (
-SELECT 1 AS Floor UNION SELECT 2 UNION SELECT 3 UNION SELECT 4
+-- Create a table for all possible states
+CREATE TABLE ##States (ID INT IDENTITY(1,1), SRGen INT, SRChip INT, PLGen INT, PLChip INT, TMGen INT, TMChip INT, RUGen INT, RUChip INT, CUGen INT, CUChip INT, Lift INT, FloorState BIGINT, Step INT)
+
+-- Populate it with all possible states and summarize the state in the floorstate column
+;WITH cte_1To4 AS (
+    SELECT TOP(4) ROW_NUMBER() OVER (ORDER BY (SELECT 0)) AS RN FROM sys.messages
 )
-INSERT ##Building (SR_Gen, SR_Chip, PL_Gen, PL_Chip, TM_Gen, TM_Chip, RU_Gen, RU_Chip, CM_Gen, CM_Chip, Elevator)
-SELECT T1.Floor, T2.Floor, T3.Floor, T4.Floor, T5.Floor, T6.Floor, T7.Floor, T8.Floor, T9.Floor, T10.Floor, T11.Floor
-FROM cte_Floors T1
-CROSS APPLY cte_Floors T2
-CROSS APPLY cte_Floors T3
-CROSS APPLY cte_Floors T4
-CROSS APPLY cte_Floors T5
-CROSS APPLY cte_Floors T6
-CROSS APPLY cte_Floors T7
-CROSS APPLY cte_Floors T8
-CROSS APPLY cte_Floors T9
-CROSS APPLY cte_Floors T10
-CROSS APPLY cte_Floors T11
+INSERT ##States (SRGen, SRChip, PLGen, PLChip, TMGen, TMChip, RUGen, RUChip, CUGen, CUChip, Lift, FloorState)
+SELECT T1.RN, T2.RN, T3.RN, T4.RN, T5.RN, T6.RN, T7.RN, T8.RN, T9.RN, T10.RN, T11.RN,
+    10000000000*T1.RN + 1000000000*T2.RN + 100000000*T3.RN + 10000000*T4.RN + 1000000*T5.RN + 100000*T6.RN + 10000*T7.RN + 1000*T8.RN + 100*T9.RN + 10*T10.RN + T11.RN
+FROM cte_1To4 T1
+CROSS APPLY cte_1To4 T2
+CROSS APPLY cte_1To4 T3
+CROSS APPLY cte_1To4 T4
+CROSS APPLY cte_1To4 T5
+CROSS APPLY cte_1To4 T6
+CROSS APPLY cte_1To4 T7
+CROSS APPLY cte_1To4 T8
+CROSS APPLY cte_1To4 T9
+CROSS APPLY cte_1To4 T10
+CROSS APPLY cte_1To4 T11
 
-UPDATE ##Building SET Code = CAST(SR_Gen AS BIGINT)* 10000000000 + CAST(SR_Chip AS BIGINT)* 1000000000 + CAST(PL_Gen AS BIGINT) * 100000000 + CAST(PL_Chip AS BIGINT) * 10000000 + TM_Gen * 1000000 + TM_Chip * 100000 + RU_Gen * 10000 + RU_Chip * 1000 + CM_Gen * 100 + CM_Chip * 10 +  Elevator 
+-- Remove all states that have an unprotected chip
+DELETE FROM ##States
+WHERE SRGen <> SRChip
+AND SRChip IN (PLGen, TMGen, RUGen, CUGen)
 
-PRINT '##Building filled'
+DELETE FROM ##States
+WHERE PLGen <> PLChip
+AND PLChip IN (SRGen, TMGen, RUGen, CUGen)
 
---SELECT TOP 100 * FROM ##Building
+DELETE FROM ##States
+WHERE TMGen <> TMChip
+AND TMChip IN (PLGen, SRGen, RUGen, CUGen)
 
-CREATE INDEX UQ_Building_Code ON ##Building (Code)
+DELETE FROM ##States
+WHERE RUGen <> RUChip
+AND RUChip IN (PLGen, TMGen, SRGen, CUGen)
 
-UPDATE ##Building SET Step = 0 WHERE Code = 11112322221
+DELETE FROM ##States
+WHERE CUGen <> CUChip
+AND CUChip IN (PLGen, TMGen, RUGen, SRGen)
 
---SELECT COUNT(1) FROM ##Building
+-- And remove all states where the elevator is at a level without chips or generators
+DELETE FROM ##States WHERE Lift NOT IN ([SRGen],[SRChip],[PLGen],[PLChip],[TMGen],[TMChip],[RUGen],[RUChip],[CUGen],[CUChip])
 
---Remove all invalid records (where we have an unprotected chip)
-DELETE
-FROM ##Building
-WHERE SR_Chip <> SR_Gen AND (SR_Chip = PL_Gen OR SR_Chip = TM_Gen OR SR_Chip = RU_Gen OR SR_Chip = CM_Gen)
+-- We'll be looking at floorstates a lot so let's index that
+CREATE CLUSTERED INDEX IX_States_FloorState ON ##States(FloorState)
+--CREATE NONCLUSTERED INDEX IX_State_Step ON [dbo].[##States] ([Step]) INCLUDE ([FloorState])
 
-DELETE
-FROM ##Building
-WHERE PL_Chip <> PL_Gen AND (PL_Chip = SR_Gen OR PL_Chip = TM_Gen OR PL_Chip = RU_Gen OR PL_Chip = CM_Gen)
+-- Define the end point as the start point ;)
+UPDATE ##States
+SET Step = 0 
+WHERE SRGen = 4 AND PLGen = 4 AND TMGen = 4 AND RUGen = 4 AND CUGen = 4 AND SRChip = 4 AND PLChip = 4 AND TMChip = 4 AND RUChip = 4 AND CUChip = 4 AND Lift = 4
 
-DELETE
-FROM ##Building
-WHERE TM_Chip <> TM_Gen AND (TM_Chip = PL_Gen OR TM_Chip = SR_Gen OR TM_Chip = RU_Gen OR TM_Chip = CM_Gen)
+--Create a table with all possible moves
+CREATE TABLE ##Moves (ID INT IDENTITY(1,1), FloorStateChange BIGINT)
+INSERT ##Moves (FloorStateChange) VALUES 
+                 -- The elevator moves 1 item
+                 (10000000001)
+                ,(1000000001)
+                ,(100000001)
+                ,(10000001)
+                ,(1000001)
+                ,(100001)
+                ,(10001)
+                ,(1001)
+                ,(101)
+                ,(11)
+  
+                -- The elevator moves 2 items; SRGen fixed
+                ,(11000000001)
+                ,(10100000001)
+                ,(10010000001)
+                ,(10001000001)
+                ,(10000100001)
+                ,(10000010001)
+                ,(10000001001)
+                ,(10000000101)
+                ,(10000000011)
+                
+                -- The elevator moves 2 items; SRChip fixed
+                ,(1100000001)
+                ,(1010000001)
+                ,(1001000001)
+                ,(1000100001)
+                ,(1000010001)
+                ,(1000001001)
+                ,(1000000101)
+                ,(1000000011)
+  
+                -- The elevator moves 2 items; PLGen fixed
+                ,(110000001)
+                ,(101000001)
+                ,(100100001)
+                ,(100010001)
+                ,(100001001)
+                ,(100000101)
+                ,(100000011)
+  
+                -- The elevator moves 2 items; PLChip fixed
+                ,(11000001)
+                ,(10100001)
+                ,(10010001)
+                ,(10001001)
+                ,(10000101)
+                ,(10000011)
+  
+                -- The elevator moves 2 items; TMGen fixed
+                ,(1100001)
+                ,(1010001)
+                ,(1001001)
+                ,(1000101)
+                ,(1000011)
+  
+                -- The elevator moves 2 items; TMChip fixed
+                ,(110001)
+                ,(101001)
+                ,(100101)
+                ,(100011)
+                
+                -- The elevator moves 2 items; RUGen fixed
+                ,(11001)
+                ,(10101)
+                ,(10011)
+                
+                -- The elevator moves 2 items; RUChip fixed
+                ,(1101)
+                ,(1011)
+  
+                -- The elevator moves 2 items; SUGen fixed
+                ,(111)
+                
 
-DELETE
-FROM ##Building
-WHERE RU_Chip <> RU_Gen AND (RU_Chip = PL_Gen OR RU_Chip = TM_Gen OR RU_Chip = SR_Gen OR RU_Chip = CM_Gen)
-
-DELETE
-FROM ##Building
-WHERE CM_Chip <> CM_Gen AND (CM_Chip = PL_Gen OR CM_Chip = TM_Gen OR CM_Chip = RU_Gen OR CM_Chip = SR_Gen)
-
-
-
---Remove all impossible records (where the elevator is at a floor where there are no components)
-
-DELETE
-FROM ##Building
-WHERE Elevator <> SR_Gen
-  AND Elevator <> SR_Chip
-  AND Elevator <> PL_Gen
-  AND Elevator <> PL_Chip
-  AND Elevator <> TM_Gen
-  AND Elevator <> TM_Chip
-  AND Elevator <> RU_Gen
-  AND Elevator <> RU_Chip
-  AND Elevator <> CM_Gen
-  AND Elevator <> CM_Chip
-
-PRINT '##Building illegal removed'
-
-DECLARE @TargetID INT
-SELECT @TargetID = ID FROM ##Building WHERE Code = 44444444444
---SELECT * FROM ##Building WHERE ID = @TargetID
+-- Also add moves in the other direction
+INSERT ##Moves (FloorStateChange) SELECT -1 * FloorStateChange FROM ##Moves
 
 DECLARE @Step INT = 0
+DECLARE @Count INT = 1
 
-CREATE TABLE ##StepCodes (Code BIGINT)
-CREATE TABLE ##PossibleStepCodes (Code BIGINT)
-
-WHILE (SELECT Step FROM ##Building WHERE ID = @TargetID) IS NULL
+WHILE @Count > 0
 BEGIN
 
-    DELETE FROM ##StepCodes
-    DELETE FROM ##PossibleStepCodes
+    UPDATE S1
+    SET S1.Step = @Step + 1
+    FROM ##States S1
+    WHERE S1.Step IS NULL
+      AND S1.FloorState IN (SELECT FloorState + FloorStateChange FROM ##States CROSS APPLY ##Moves WHERE Step = @Step)
 
-    INSERT ##StepCodes
-    SELECT Code FROM ##Building WHERE Step = @Step
+    SET @Count = @@ROWCOUNT
 
     SET @Step = @Step + 1
 
-    --Single transportations
-    INSERT ##PossibleStepCodes SELECT Code + 10000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 10000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 10001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 11 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 11 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    --Double transportations
-    INSERT ##PossibleStepCodes SELECT Code + 11000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 11000000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10010000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10010000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10001000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10001000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),1,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1100000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1010000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1010000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1001000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1001000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),2,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 110000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 110000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 101000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 101000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),3,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 11000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 11000001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),4,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1100001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1010001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1001001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1000011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),5,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 110001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 110001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 101001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 101001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 100011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 100011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),6,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 11001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 11001 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 10011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 10011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),7,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 1101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1101 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-    INSERT ##PossibleStepCodes SELECT Code + 1011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 1011 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),8,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    INSERT ##PossibleStepCodes SELECT Code + 111 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) < 4
-    INSERT ##PossibleStepCodes SELECT Code - 111 FROM ##StepCodes WHERE SUBSTRING(CAST(Code AS VARCHAR(15)),9,1) = RIGHT(Code, 1) AND SUBSTRING(CAST(Code AS VARCHAR(15)),10,1) = RIGHT(Code, 1) AND RIGHT(Code, 1) > 1
-
-    UPDATE ##Building
-    SET Step = @Step
-    WHERE Code IN (SELECT Code FROM ##PossibleStepCodes) AND Step IS NULL
-
-    PRINT 'Step ' + CAST(@Step AS VARCHAR(10)) + ' at ' + CAST(GETDATE() AS VARCHAR(50))
-
+    --PRINT CAST(GETDATE() AS VARCHAR(100)) + ' Step: ' + CAST(@Step AS VARCHAR(3))
 END
 
-
---SELECT * FROM ##StepCodes
---SELECT * FROM ##PossibleStepCodes
-
-SELECT * FROM ##Building WHERE ID = @TargetID
+SELECT Step AS Part1 FROM ##States WHERE SRGen = 1 AND SRChip = 1 AND PLGen = 1 AND PLChip = 1 AND TMGen = 2 AND TMChip = 3 AND RUGen = 2 AND RUChip = 2 AND CUGen = 2 AND CUChip = 2 AND Lift = 1
 
 
-DROP TABLE ##Building
-DROP TABLE ##StepCodes
-DROP TABLE ##PossibleStepCodes
+-- Adding two extra chips and two extra generators
+
+;WITH cte_1To4 AS (
+    SELECT TOP(4) ROW_NUMBER() OVER (ORDER BY (SELECT 0)) AS RN FROM sys.messages
+), cte_NewStates AS (
+    SELECT T1.RN AS ELGen, T2.RN AS ELChip, T3.RN AS DIGen, T4.RN AS DIChip
+    FROM cte_1To4 T1
+    CROSS APPLY cte_1To4 T2
+    CROSS APPLY cte_1To4 T3
+    CROSS APPLY cte_1To4 T4
+)
+SELECT 100000000000000 * ElGen + 10000000000000 * ElChip + 1000000000000 * DiGen + 100000000000 * DiChip + FloorState AS FloorState
+, ELGen, ELChip, DIGen, DIChip, SRGen, SRChip, PLGen, PLChip, TMGen, TMChip, RUGen, RUChip, CUGen, CUChip, Lift
+, NULL AS Step --CASE WHEN ELGen = 4 AND ELChip = 4 AND DIGen = 4 AND DIChip = 4 THEN Step ELSE NULL END AS Step -- We'll recalculate all steps
+INTO ##AllStates
+FROM cte_NewStates
+CROSS APPLY ##States
+WHERE Step IS NOT NULL -- Leave out unreachable states
+-- And leave out states where a chip is unprotected
+AND (ELChip = ELGen OR ELChip NOT IN (DIGen, SRGen, PLGen, TMGen, RUGen, CUGen))
+AND (DIChip = DIGen OR DIChip NOT IN (ELGen, SRGen, PLGen, TMGen, RUGen, CUGen))
+AND (SRChip = SRGen OR SRChip NOT IN (DIGen, ELGen, PLGen, TMGen, RUGen, CUGen))
+AND (PLChip = PLGen OR PLChip NOT IN (DIGen, SRGen, ELGen, TMGen, RUGen, CUGen))
+AND (TMChip = TMGen OR TMChip NOT IN (DIGen, SRGen, PLGen, ELGen, RUGen, CUGen))
+AND (RUChip = RUGen OR RUChip NOT IN (DIGen, SRGen, PLGen, TMGen, ELGen, CUGen))
+AND (CUChip = CUGen OR CUChip NOT IN (DIGen, SRGen, PLGen, TMGen, RUGen, ELGen))
 
 
+-- We'll still be looking at floorstates a lot so let's index that
+CREATE CLUSTERED INDEX IX_AllStates_FloorState ON ##AllStates(FloorState)
 
----------------Part 2: just more items :S
+-- Expand the moves table
+INSERT ##Moves (FloorStateChange) VALUES 
+                 -- The elevator moves 1 (new) item
+                 (100000000000001)
+                ,(10000000000001)
+                ,(1000000000001)
+                ,(100000000001)
+
+                -- The elevator moves 2 items; ELGen fixed
+                ,(110000000000001)
+                ,(101000000000001)
+                ,(100100000000001)
+                ,(100010000000001)
+                ,(100001000000001)
+                ,(100000100000001)
+                ,(100000010000001)
+                ,(100000001000001)
+                ,(100000000100001)
+                ,(100000000010001)
+                ,(100000000001001)
+                ,(100000000000101)
+                ,(100000000000011)
+
+                -- The elevator moves 2 items; ELChip fixed
+                ,(11000000000001)
+                ,(10100000000001)
+                ,(10010000000001)
+                ,(10001000000001)
+                ,(10000100000001)
+                ,(10000010000001)
+                ,(10000001000001)
+                ,(10000000100001)
+                ,(10000000010001)
+                ,(10000000001001)
+                ,(10000000000101)
+                ,(10000000000011)
+
+                -- The elevator moves 2 items; DIGen fixed
+                ,(1100000000001)
+                ,(1010000000001)
+                ,(1001000000001)
+                ,(1000100000001)
+                ,(1000010000001)
+                ,(1000001000001)
+                ,(1000000100001)
+                ,(1000000010001)
+                ,(1000000001001)
+                ,(1000000000101)
+                ,(1000000000011)
+
+                -- The elevator moves 2 items; DIChip fixed
+                ,(110000000001)
+                ,(101000000001)
+                ,(100100000001)
+                ,(100010000001)
+                ,(100001000001)
+                ,(100000100001)
+                ,(100000010001)
+                ,(100000001001)
+                ,(100000000101)
+                ,(100000000011)
 
 
---Should be more than 37 
---Less than 100
---58 niet goed
---59 niet goed
---62 niet goed
---63 niet goed
---64 niet goed
---65 niet goed
---66 niet goed
---67 niet goed
---68 niet goed
+INSERT ##Moves (FloorStateChange) SELECT -1 * FloorStateChange FROM ##Moves WHERE -1 * FloorStateChange NOT IN (SELECT FloorStateChange FROM ##Moves)
 
---61 IS GOED!!!
+-- Define the end point as the start point ;)
+UPDATE ##AllStates
+SET Step = 0 
+WHERE DIGen = 4 AND DIChip = 4 AND ELGen = 4 AND ELChip = 4 AND SRGen = 4 AND PLGen = 4 AND TMGen = 4 AND RUGen = 4 AND CUGen = 4 AND SRChip = 4 AND PLChip = 4 AND TMChip = 4 AND RUChip = 4 AND CUChip = 4 AND Lift = 4
 
+--DECLARE @Count INT, @Step INT
+
+SET @Count = 1
+SET @Step = 0
+
+WHILE @Count > 0
+BEGIN
+
+    UPDATE S1
+    SET S1.Step = @Step + 1
+    FROM ##AllStates S1
+    WHERE S1.Step IS NULL
+      AND S1.FloorState IN (SELECT FloorState + FloorStateChange FROM ##AllStates CROSS APPLY ##Moves WHERE Step = @Step)
+
+    SET @Count = @@ROWCOUNT
+
+    SET @Step = @Step + 1
+
+    PRINT CAST(GETDATE() AS VARCHAR(100)) + ' Step: ' + CAST(@Step AS VARCHAR(3))
+END
+
+SELECT MIN(Step) AS Part1 FROM ##AllStates WHERE SRGen = 1 AND SRChip = 1 AND PLGen = 1 AND PLChip = 1 AND TMGen = 2 AND TMChip = 3 AND RUGen = 2 AND RUChip = 2 AND CUGen = 2 AND CUChip = 2 AND Lift = 1
+SELECT Step AS Part2 FROM ##AllStates WHERE DIGen = 1 AND DIChip = 1 AND ELGen = 1 AND ELChip = 1 AND SRGen = 1 AND SRChip = 1 AND PLGen = 1 AND PLChip = 1 AND TMGen = 2 AND TMChip = 3 AND RUGen = 2 AND RUChip = 2 AND CUGen = 2 AND CUChip = 2 AND Lift = 1
+
+
+-- Part 1: 37
+-- Part 2: 61
 
 /*
 
+--Runtime about 30 minutes when running it seperate sequential parts
 
-2 = 4
-4 = 11  (+7)
-6 = 17  (+6)
-8 = 25  (+8)
-10 = 37 (+12)
-14 =    (~ +12 + 24 => 49 - 61)
-
-
+DROP TABLE ##States
+DROP TABLE ##AllStates
+DROP TABLE ##Moves
 
 */
+
