@@ -47,12 +47,14 @@ EXEC dbo.ParseInput @year = @year, @day = @day
     
 */
 
+-- Combine the information about the race in one row
 ;WITH cte_input AS (
     SELECT CAST(I1.PieceNr AS INT) - 1 AS RaceNr, CAST(I1.Piece AS DECIMAL(18,2)) AS Total_Time, CAST(I2.Piece AS DECIMAL(18,2)) AS Current_Distance
     FROM ##InputSplit I1
     INNER JOIN ##InputSplit I2 ON I2.RowNr = 2 AND I1.PieceNr = I2.PieceNr 
     WHERE I1.PieceNr <> 1 AND I1.RowNr = 1
 ), cte_breakpoints AS (
+    -- Apply the quadratic formula
     SELECT RaceNr
     ,      (Total_Time - SQRT(Total_Time*Total_Time - 4 * Current_Distance)) / 2 AS P1      -- Calculate the two points where between we get a better distance
     ,      (Total_Time + SQRT(Total_Time*Total_Time - 4 * Current_Distance)) / 2 AS P2
@@ -63,7 +65,7 @@ FROM  (
     SELECT RaceNr
     , FLOOR(P2) - CEILING(P1) + 1                                       -- Don't forget to include the border values
     - CASE WHEN FLOOR(P2) = P2 THEN 1 ELSE 0 END                        -- Correct the values if they end up exactly on an integer
-    - CASE WHEN CEILING(P1) = P1 THEN 1 ELSE 0 END AS WinPossibilities  -- such a value would give you the same distance as the Current_Distance which isn't good enough to win the race
+    - CASE WHEN CEILING(P1) = P1 THEN 1 ELSE 0 END AS WinPossibilities  --  such a value would give you the same distance as the Current_Distance which isn't good enough to win the race
     FROM cte_breakpoints
 ) Sub
 PIVOT (
@@ -72,7 +74,7 @@ PIVOT (
 ) PVT
 
 
-
+-- For part 2 we get bigger values but since we didn't brute force the previous answer we can apply the same solution (accounting for BIGINTs)
 ;WITH cte_input AS (
     SELECT CAST(REPLACE(SUBSTRING(I1.Line, 6, LEN(I1.Line)), ' ', '') AS BIGINT) AS Total_Time
     ,      CAST(REPLACE(SUBSTRING(I2.Line, 10, LEN(I2.Line)), ' ', '') AS BIGINT) AS Current_Distance
@@ -81,9 +83,11 @@ PIVOT (
     WHERE I1.Ind = 1
 
 ), cte_breakpoints AS (
+    -- Calculate the quadratic formula
     SELECT (Total_Time - SQRT(Total_Time*Total_Time - 4 * Current_Distance)) / 2 AS P1
     ,      (Total_Time + SQRT(Total_Time*Total_Time - 4 * Current_Distance)) / 2 AS P2
     FROM cte_input
 )
 SELECT FLOOR(P2) - CEILING(P1) + 1 AS Part2 -- Don't forget to include the border values
 FROM cte_breakpoints
+
