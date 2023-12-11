@@ -11,24 +11,26 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 --SELECT TOP 10 * FROM ##Input
 --SELECT TOP 10 * FROM ##InputInts
 --SELECT TOP 10 * FROM ##InputNumbered
-
 --SELECT TOP 10 * FROM ##InputSplit
 --SELECT TOP 10 * FROM ##InputSplitCust
 
 DECLARE @StartRow INT
 DECLARE @StartCol INT
 
+-- Frankly too much to determine what piece of pipe is under the starting point (S)
 SELECT @StartRow = RowNr, @StartCol = ColNr 
 FROM ##InputGrid I1
 WHERE I1.Val = 'S'
 
 DECLARE @PieceUnderStart VARCHAR(2) = ''
 
+-- To which sides does the piece connect
 SELECT @PieceUnderStart = @PieceUnderStart + 'N' FROM ##InputGrid I1 WHERE RowNr = @StartRow - 1 AND ColNr = @StartCol AND I1.Val IN ('|','7','F')
 SELECT @PieceUnderStart = @PieceUnderStart + 'S' FROM ##InputGrid I1 WHERE RowNr = @StartRow + 1 AND ColNr = @StartCol AND I1.Val IN ('|','J','L')
 SELECT @PieceUnderStart = @PieceUnderStart + 'W' FROM ##InputGrid I1 WHERE RowNr = @StartRow AND ColNr = @StartCol - 1 AND I1.Val IN ('-','L','F')
 SELECT @PieceUnderStart = @PieceUnderStart + 'E' FROM ##InputGrid I1 WHERE RowNr = @StartRow AND ColNr = @StartCol + 1 AND I1.Val IN ('-','J','7')
 
+-- Change the S in the grid to the actual pipe piece
 UPDATE I
 SET Val = CASE WHEN @PieceUnderStart = 'NS' THEN '|'
                WHEN @PieceUnderStart = 'WE' THEN '-' 
@@ -44,11 +46,13 @@ WHERE I.RowNr = @StartRow AND I.ColNr = @StartCol
 DECLARE @Count INT = 1
 DECLARE @Step INT = 0
 
+-- Follow the pipe until no new parts can be found
 CREATE TABLE ##Steps (ID INT IDENTITY(1,1), RowNr INT, ColNr INT, Val CHAR, Steps INT, InsideDir VARCHAR(2))
 
 CREATE UNIQUE INDEX Ind_IGRowCol ON ##InputGrid (ColNr, RowNr)
 CREATE UNIQUE INDEX Ind_STRowCol ON ##Steps (ColNr, RowNr)
 
+-- Store the starting point and arbitrarily assign one side of the pipe to be the inside (which is needed for part 2)
 INSERT ##Steps (RowNr, ColNr, Val, Steps, InsideDir)
 SELECT RowNr,
        ColNr,
@@ -61,6 +65,8 @@ SELECT RowNr,
 FROM ##InputGrid I
 WHERE I.RowNr = @StartRow AND I.ColNr = @StartCol
 
+-- Find the part attached to the part of the pipe we already know and store it
+-- For part 2: keep track which side is the inside of the pipe
 WHILE @Count > 0
 BEGIN
 
@@ -111,22 +117,12 @@ BEGIN
 
 END
 
-
+-- After we've discovered the whole pipe, determine the farthest point
 SELECT MAX(Steps) AS Part1
 FROM ##Steps S
 
-/*
--- Find a side of the tube to determine which side is the outside
 
-SELECT MIN(RowNr), MAX(Rownr), MIN(ColNr), MAX(ColNr) FROM ##Steps
-SELECT * FROM ##Steps WHERE ColNr = 5
-SELECT * FROM ##InputGrid WHERE ColNr <= 5 AND RowNr = 79
-
-*/
-
-
-
-
+-- Based on which side of the pipe is the inside, take all points adjacent to the pipe but not part of the pipe
 CREATE TABLE ##EmptySpaces (ID INT IDENTITY(1,1), RowNr INT, ColNr INT)
 
 INSERT ##EmptySpaces
@@ -150,12 +146,10 @@ WHERE S2.ID IS NULL
 GROUP BY IG.RowNr,
          IG.ColNr
 
---SELECT COUNT(1) FROM ##EmptySpaces ES
 
-
---DECLARE @Count INT
 SET @Count = 1
 
+-- Expand the found points to adjacent points that are also not part of the actual pipe
 WHILE @Count > 0
 BEGIN
 
@@ -167,17 +161,16 @@ BEGIN
     SELECT IG.RowNr, IG.ColNr
     FROM ##EmptySpaces ES
     INNER JOIN ##InputGrid IG ON ABS(ES.RowNr - IG.RowNr) <= 1 AND ABS(ES.ColNr - IG.ColNr) <= 1
-                                 --(ABS(ES.RowNr - IG.RowNr) = 1 AND ES.ColNr = IG.ColNr) OR (ABS(ES.ColNr - IG.ColNr) = 1 AND ES.RowNr = IG.RowNr)
     LEFT JOIN ##EmptySpaces ES2 ON ES2.ColNr = IG.ColNr AND ES2.RowNr = IG.RowNr
     LEFT JOIN ##Steps S ON S.ColNr = IG.ColNr AND S.RowNr = IG.RowNr
-    WHERE IG.Val = '.' AND ES2.ID IS NULL AND S.ID IS NULL
+    WHERE ES2.ID IS NULL AND S.ID IS NULL
     GROUP BY IG.RowNr,
              IG.ColNr
 
     SET @Count = @@ROWCOUNT
 END
 
-SELECT COUNT(1) FROM ##EmptySpaces ES
+SELECT COUNT(1) AS Part2 FROM ##EmptySpaces ES
 
 /*
 
@@ -185,20 +178,4 @@ DROP TABLE ##Steps
 DROP TABLE ##EmptySpaces
 
 */
-
--- 203 too low
---1094 too high
---1057 too high
--- 281 is incorrect
-
-
-SELECT COUNT(1) FROM ##Steps S --ORDER BY RowNr, ColNr
-SELECT COUNT(1) FROM ##EmptySpaces ES --ORDER BY RowNr, ColNr
-SELECT COUNT(1) FROM ##InputGrid
-
---SELECT ColNr AS X, RowNr AS Y
---INTO ##Grid
---FROM ##Steps S
-
---EXEC [PrintGrid] @GridType = 'Sparse'
 

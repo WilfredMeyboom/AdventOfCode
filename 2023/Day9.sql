@@ -17,6 +17,7 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 
 CREATE TABLE ##Histories (ID INT IDENTITY(1,1), RowNr INT, PieceNr INT, Val INT, Lvl INT)
 
+-- Store the starting lines (and assign a level 1)
 INSERT ##Histories
 (
     RowNr,
@@ -34,6 +35,8 @@ FROM ##InputSplit
 DECLARE @Lvl INT = 1
 DECLARE @Count INT = 1
 
+-- Calculate all the next lines 
+-- (Don't try to stop when the line is all zeros, since every line is one shorter than the previous one, the calculation will end automatically)
 WHILE @Count > 0
 BEGIN
 
@@ -55,21 +58,24 @@ BEGIN
 
 END
 
+-- Interestingly the value we need is a sum of all the last values of all the line
+-- So if we take the last value on each line and level and add them, we get the answer per line
 ;WITH cte_LastValues AS (
     SELECT RowNr, Lvl, MAX(PieceNr) AS MaxPieceNr FROM ##Histories H 
     GROUP BY RowNr, Lvl
 )
-SELECT SUM(Val)
+SELECT SUM(Val) AS Part1
 FROM cte_LastValues cLV
 INNER JOIN ##Histories H ON H.RowNr = cLV.RowNr AND H.Lvl = cLV.Lvl AND H.PieceNr = cLV.MaxPieceNr
 
+
+-- This also works on the other end but the values should be alternately added and substracted
 ;WITH cte_LastValues AS (
     SELECT RowNr, Lvl, MIN(PieceNr) AS MaxPieceNr FROM ##Histories H 
     GROUP BY RowNr, Lvl
 )
-SELECT SUM(CASE WHEN cLV.Lvl % 2  = 1 THEN Val ELSE -1 * Val END)
+SELECT SUM(CASE WHEN cLV.Lvl % 2  = 1 THEN Val ELSE -1 * Val END) AS Part2
 FROM cte_LastValues cLV
 INNER JOIN ##Histories H ON H.RowNr = cLV.RowNr AND H.Lvl = cLV.Lvl AND H.PieceNr = cLV.MaxPieceNr
-
 
 --DROP TABLE ##Histories
