@@ -142,9 +142,7 @@ SELECT SUM ((P.ColNr - P2.ColNr) * CAST(P.RowNr AS BIGINT)) -- AS Area
 FROM ##Points P
 INNER JOIN ##Points P2 ON P2.ID = P.ID + 1 OR (P.ID = @MaxID AND P2.ID = 1)
 
--- Too Low
 
---SELECT * FROM ##Points P
 /*
 
 

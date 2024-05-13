@@ -33,7 +33,11 @@ FETCH NEXT FROM hashcursor INTO @Index, @Hash
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    
+    -- For each line in the input repeat (start at 0):
+        -- Get ASCII value for the next character and add to previous value
+        -- Multiply by 17
+        -- Mod 256
+        -- This gives the value for the calculation with the next character
 
     INSERT ##Hashes
     (
@@ -60,11 +64,13 @@ BEGIN
         FROM cte_Hash
         WHERE LeftChar <> ''
     )
+    -- The recursive cte shows all intermediate steps, just keep the final value
     SELECT @CurrentValue = CASE WHEN LeftChar = '' THEN CurrentValue END
     ,      @BoxNr = BoxNr
     FROM cte_Hash
     WHERE LeftChar = ''
 
+    -- And store it
     UPDATE ##Hashes
     SET NextValue = @CurrentValue
     ,   BoxNr = @BoxNr
@@ -77,9 +83,10 @@ END
 CLOSE hashcursor
 DEALLOCATE hashcursor
 
-
+-- Sum values for part 1
 SELECT SUM(NextValue) AS Part1 FROM ##Hashes H
 
+-- Prepare the input as a series of instructions
 SELECT ROW_NUMBER() OVER (ORDER BY BoxNr, Ind) AS RowNr
 ,      H.HashString
 ,      H.BoxNr
@@ -94,9 +101,9 @@ SELECT ROW_NUMBER() OVER (ORDER BY BoxNr, Ind) AS RowNr
 INTO ##Instructions
 FROM ##Hashes H ORDER BY BoxNr, Ind
 
+-- We'll need a list of boxes, lenses and their focal lengths
 CREATE TABLE ##Boxes (ID INT IDENTITY(1,1), BoxNr INT, Lens VARCHAR(10), FocalLength INT)
 
-/* declare variables */
 DECLARE @LensLabel VARCHAR(10)
 DECLARE @FocalLength INT
 
@@ -109,12 +116,15 @@ FETCH NEXT FROM InstrCursor INTO @BoxNr, @LensLabel, @FocalLength
 WHILE @@FETCH_STATUS = 0
 BEGIN
     
+    -- If the focal length is -1 remove the lens from box (SQL advantage: this statement also works if the lens is not there)
     IF @FocalLength = -1 DELETE FROM ##Boxes WHERE BoxNr = @BoxNr AND Lens = @LensLabel
     ELSE
-        IF EXISTS (SELECT 1 FROM ##Boxes B WHERE B.BoxNr = @BoxNr AND B.Lens = @LensLabel)
-            UPDATE ##Boxes SET FocalLength = @FocalLength WHERE BoxNr = @BoxNr AND Lens = @LensLabel
-        ELSE 
-            INSERT ##Boxes (BoxNr, Lens, FocalLength) SELECT @BoxNr, @LensLabel, @FocalLength
+    -- If the lens is already present in a box, update it's focal length
+    IF EXISTS (SELECT 1 FROM ##Boxes B WHERE B.BoxNr = @BoxNr AND B.Lens = @LensLabel)
+        UPDATE ##Boxes SET FocalLength = @FocalLength WHERE BoxNr = @BoxNr AND Lens = @LensLabel
+    ELSE 
+    -- Apparently this is a new lens, so add it to the box
+        INSERT ##Boxes (BoxNr, Lens, FocalLength) SELECT @BoxNr, @LensLabel, @FocalLength
 
     FETCH NEXT FROM InstrCursor INTO @BoxNr, @LensLabel, @FocalLength
 END
@@ -122,10 +132,12 @@ END
 CLOSE InstrCursor
 DEALLOCATE InstrCursor
 
+-- Order the lenses (within each box) and calculate the value per box
 ;WITH cte_FocusPower AS (
     SELECT (BoxNr + 1) * ROW_NUMBER() OVER (PARTITION BY BoxNr ORDER BY ID) * B.FocalLength AS FocusPower
     FROM ##Boxes B 
 )
+-- Sum over all boxes for the answer to part 2
 SELECT SUM(FocusPower) AS Part2
 FROM cte_FocusPower
 

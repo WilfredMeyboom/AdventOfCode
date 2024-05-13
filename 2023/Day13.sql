@@ -14,11 +14,13 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 --SELECT TOP 10 * FROM ##InputSplit
 --SELECT TOP 10 * FROM ##InputSplitCust
 
+-- We'll be cutting up the grid into individual maps. For this there needs to be an empty row below the input
 INSERT ##InputGrid (RowNr, ColNr, Val)
 SELECT MAX(RowNr) + 1, 0, NULL FROM ##InputGrid
   
 CREATE TABLE ##Maps (ID INT IDENTITY(1,1), MapNr INT, RowNr INT, ColNr INT, Val CHAR)
 
+-- Fill a table with all map data (per map, per row, per column)
 ;WITH cte_Rows2Map AS (
     SELECT ROW_NUMBER() OVER (ORDER BY RowNr) AS MapNr
     ,      ISNULL(LAG(RowNr) OVER (ORDER BY RowNr) + 1, 0) AS StartRowNr
@@ -36,6 +38,7 @@ ORDER BY MapNr, RowNr, ColNr
 
 CREATE TABLE ##MirrorLines (ID INT IDENTITY(1,1), MapNr INT, RowOrColNr INT, RowOrCol CHAR(3), RowSize INT, ColSize INT)
 
+-- Find any lines (horizontal and vertical) where the first row/column is the same on both sides
 ;WITH cte_MirrorOverRow AS (
     SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals, 'Row' AS MirrorDir
     FROM ##Maps M1
@@ -69,7 +72,7 @@ FROM cte_Mapsize cM
 INNER JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatchingVals = cM.RowSize
 ORDER BY cM.MapNr
 
-
+-- Based on these mirrorlines, fold the entire area to make sure it is exactly mirrored
 ;WITH cte_Rect AS (
     SELECT ML.ID,
            ML.MapNr,
@@ -129,12 +132,12 @@ ORDER BY cM.MapNr
     GROUP BY c.MapNr, c.RowOrColNr, c.RowOrCol
 )
 SELECT SUM(CASE WHEN RowOrCol = 'Col' THEN RowOrColNr + 1 ELSE 0 END)
-+      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100
++      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100 AS Part1
 FROM cte_Sizes
 WHERE Size = MatchingSize
 
 
-
+-- Basically we do the same, find all mirror lines (horizontal and vertical) but we allow for 1 mismatch between left <-> right / top <-> down
 ;WITH cte_MirrorOverRow AS (
     SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals, 'Row' AS MirrorDir
     FROM ##Maps M1
@@ -169,7 +172,7 @@ INNER JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatching
 ORDER BY cM.MapNr
 
 
-
+-- Based on this expanded set of mirrorlines, again fold the entire area and check when there is exactly one difference in the areas
 ;WITH cte_Rect AS (
     SELECT ML.ID,
            ML.MapNr,
@@ -229,7 +232,7 @@ ORDER BY cM.MapNr
     GROUP BY c.MapNr, c.RowOrColNr, c.RowOrCol
 )
 SELECT SUM(CASE WHEN RowOrCol = 'Col' THEN RowOrColNr + 1 ELSE 0 END)
-+      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100
++      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100 AS Part2
 FROM cte_Sizes
 WHERE Size = MatchingSize + 1
 
