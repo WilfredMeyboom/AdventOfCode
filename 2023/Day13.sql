@@ -34,10 +34,10 @@ WHERE I.Val IS NOT NULL
 ORDER BY MapNr, RowNr, ColNr
 
 
-CREATE TABLE ##MirrorLines (ID INT IDENTITY(1,1), MapNr INT, RowNr INT, ColNr INT, RowSize INT, ColSize INT)
+CREATE TABLE ##MirrorLines (ID INT IDENTITY(1,1), MapNr INT, RowOrColNr INT, RowOrCol CHAR(3), RowSize INT, ColSize INT)
 
 ;WITH cte_MirrorOverRow AS (
-    SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals
+    SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals, 'Row' AS MirrorDir
     FROM ##Maps M1
     INNER JOIN ##Maps M2 ON M1.MapNr = M2.MapNr 
                         AND M1.RowNr = M2.RowNr - 1 
@@ -45,7 +45,7 @@ CREATE TABLE ##MirrorLines (ID INT IDENTITY(1,1), MapNr INT, RowNr INT, ColNr IN
                         AND M1.Val = M2.Val
     GROUP BY M1.MapNr, M1.RowNr
 ), cte_MirrorOverCol AS (
-    SELECT M1.MapNr, M1.ColNr, COUNT(1) AS NrOfMatchingVals
+    SELECT M1.MapNr, M1.ColNr, COUNT(1) AS NrOfMatchingVals, 'Col' AS MirrorDir
     FROM ##Maps M1
     INNER JOIN ##Maps M2 ON M1.MapNr = M2.MapNr 
                         AND M1.RowNr = M2.RowNr
@@ -57,116 +57,86 @@ CREATE TABLE ##MirrorLines (ID INT IDENTITY(1,1), MapNr INT, RowNr INT, ColNr IN
     FROM ##Maps
     GROUP BY MapNr
 )
-INSERT ##MirrorLines (MapNr, RowNr, ColNr, RowSize, ColSize)
-SELECT cM.MapNr, CMOR.RowNr, CMOC.ColNr, cM.RowSize, cM.ColSize 
+INSERT ##MirrorLines (MapNr, RowOrColNr, RowOrCol, RowSize, ColSize)
+SELECT cM.MapNr, CMOR.RowNr, CMOR.MirrorDir, cM.RowSize, cM.ColSize 
 FROM cte_Mapsize cM
-LEFT JOIN cte_MirrorOverRow CMOR ON cM.MapNr = CMOR.MapNr AND CMOR.NrOfMatchingVals = cM.ColSize
-LEFT JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatchingVals = cM.RowSize
+INNER JOIN cte_MirrorOverRow CMOR ON cM.MapNr = CMOR.MapNr AND CMOR.NrOfMatchingVals = cM.ColSize
+
+UNION 
+
+SELECT cM.MapNr, CMOC.ColNr, CMOC.MirrorDir, cM.RowSize, cM.ColSize 
+FROM cte_Mapsize cM
+INNER JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatchingVals = cM.RowSize
 ORDER BY cM.MapNr
 
-SELECT *
-INTO ##MirrorLines2
-FROM ##MirrorLines
 
-DECLARE @Level INT = 1
+;WITH cte_Rect AS (
+    SELECT ML.ID,
+           ML.MapNr,
+           ML.RowOrColNr,
+           ML.RowOrCol,
+           ML.RowSize,
+           ML.ColSize
+    ,      CASE WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 >= ML.RowOrColNr THEN 0 
+                WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 < ML.RowOrColNr THEN 2 * ML.RowOrColNr - (ML.RowSize - 1) + 1
+                ELSE 0 
+           END AS StartRowUp
+    ,      CASE WHEN RowOrCol = 'Row' THEN ML.RowOrColNr
+                ELSE RowSize 
+           END AS EndRowUp
+    ,      CASE WHEN RowOrCol = 'Row' THEN ML.RowOrColNr + 1
+                ELSE 0 
+           END AS StartRowDown
+    ,      CASE WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 >= ML.RowOrColNr THEN 2 * ML.RowOrColNr + 1
+                WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 < ML.RowOrColNr THEN ML.RowSize - 1
+                ELSE ML.RowSize 
+           END AS EndRowDown
 
-WHILE (SELECT COUNT(1) FROM (SELECT MapNr, RowNr, ColNr FROM ##MirrorLines GROUP BY MapNr, RowNr, ColNr) S) > (SELECT MAX(MapNr) FROM ##Maps)
-BEGIN
-
---DECLARE @Level INT = 2
-
-    UPDATE ##MirrorLines
-    SET ColNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.ColNr = M1.ColNr + @Level AND ML.ColNr = M2.ColNr - 1 - @Level AND M1.RowNr = M2.RowNr AND M1.Val = M2.Val
-        WHERE ML.ColNr IS NOT NULL
-        GROUP BY ML.ID, ML.RowSize
-        HAVING COUNT(1) < ML.RowSize 
-    )
-
-
-    UPDATE ##MirrorLines
-    SET RowNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.RowNr = M1.RowNr + @Level AND ML.RowNr = M2.RowNr - 1 - @Level AND M1.ColNr = M2.ColNr AND M1.Val = M2.Val
-        WHERE ML.RowNr IS NOT NULL
-        GROUP BY ML.ID, ML.ColSize
-        HAVING COUNT(1) < ML.ColSize
-    )
-
-    DELETE FROM ##MirrorLines
-    WHERE RowNr IS NULL AND ColNr IS NULL
-
-    PRINT @Level
-    SET @Level = @Level + 1
-        
-END
-
-DELETE FROM ML 
-FROM ##MirrorLines ML
-INNER JOIN ##MirrorLines ML2 ON ML.ID > ML2.ID AND ML.MapNr = ML2.MapNr
-
-SELECT SUM(ISNULL(RowNr+1,0)*100 + ISNULL(ColNr+1,0))
-FROM ##MirrorLines
-
---SELECT * FROM ##MirrorLines2
---SELECT * FROM ##MirrorLines
+    ,      CASE WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 >= ML.RowOrColNr THEN 0 
+                WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 < ML.RowOrColNr THEN 2 * ML.RowOrColNr - (ML.ColSize - 1) + 1
+                ELSE 0
+           END AS StartColLeft
+    ,      CASE WHEN RowOrCol = 'Col' THEN ML.RowOrColNr
+                ELSE ColSize
+           END AS EndColLeft
+    ,      CASE WHEN RowOrCol = 'Col' THEN ML.RowOrColNr + 1
+                ELSE 0
+           END AS StartColRight
+    ,      CASE WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 >= ML.RowOrColNr THEN 2 * ML.RowOrColNr + 1
+                WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 < ML.RowOrColNr THEN ML.ColSize - 1
+                ELSE ColSize
+           END AS EndColRight
+    FROM ##MirrorLines ML
+), cte_Mirror AS (
+    SELECT c.MapNr
+    ,      c.RowOrColNr
+    ,      c.RowOrCol
+    ,      M.RowNr
+    ,      M.ColNr
+    ,      CASE WHEN c.RowOrCol = 'Col' THEN M.RowNr ELSE (2 * c.RowOrColNr + 1) - M.RowNr END AS MirrorRow
+    ,      CASE WHEN c.RowOrCol = 'Row' THEN M.ColNr ELSE (2 * c.RowOrColNr + 1) - M.ColNr END AS MirrorCol
+    ,      M.Val
+    FROM cte_Rect c
+    LEFT JOIN ##Maps M ON M.RowNr BETWEEN c.StartRowDown AND c.EndRowDown AND M.ColNr BETWEEN c.StartColRight AND c.EndColRight AND M.MapNr = c.MapNr
+), cte_Sizes AS (
+    SELECT c.MapNr
+    ,      c.RowOrColNr
+    ,      c.RowOrCol
+    ,      SUM(1) AS Size
+    ,      SUM(CASE WHEN c.Val = M.Val THEN 1 ELSE 0 END) AS MatchingSize
+    FROM cte_Mirror c
+    INNER JOIN ##Maps M ON M.MapNr = c.MapNr AND M.RowNr = c.MirrorRow AND M.ColNr = c.MirrorCol
+    GROUP BY c.MapNr, c.RowOrColNr, c.RowOrCol
+)
+SELECT SUM(CASE WHEN RowOrCol = 'Col' THEN RowOrColNr + 1 ELSE 0 END)
++      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100
+FROM cte_Sizes
+WHERE Size = MatchingSize
 
 
-/*
-Er zijn 3 groepen:
-- maps waar maar 1 regel voor is -> daar zit de smudge dus tegen de mirror lijn aan
-- maps waar precies 2 regels voor zijn of waar een row en een col voor zijn -> daar is de regel die in deel afgevallen is, degene die wij nu willen hebben
-- maps waar 3 regels of 2 regels en een row & col combi voor zijn -> hier moeten we uit 2 regels de beste gaan kiezen
-*/
-
-ALTER TABLE ##MirrorLines2 ADD Category INT
-
-UPDATE M
-SET Category = 3
-FROM ##MirrorLines2 M
-INNER JOIN ##MirrorLines2 M2 ON M.ID <> M2.ID AND M.MapNr = M2.MapNr
-WHERE M.RowNr IS NOT NULL AND M2.ColNr IS NOT NULL
-
-UPDATE M
-SET Category = 3
-FROM ##MirrorLines2 M
-WHERE MapNr IN (SELECT MapNr FROM ##MirrorLines2 GROUP BY MapNr HAVING COUNT(1) > 2)
-
-UPDATE M
-SET Category = 2
-FROM ##MirrorLines2 M WHERE RowNr IS NOT NULL AND ColNr IS NOT NULL
-
-UPDATE M
-SET Category = 2
-FROM ##MirrorLines2 M
-WHERE MapNr IN (SELECT MapNr FROM ##MirrorLines2 GROUP BY MapNr HAVING COUNT(1) = 2)
-                             
-UPDATE M
-SET Category = 1
-FROM ##MirrorLines2 M
-WHERE Category IS NULL
-
-UPDATE M2
-SET M2.RowNr = CASE WHEN M.RowNr IS NOT NULL THEN NULL ELSE M2.RowNr END
-,   M2.ColNr = CASE WHEN M.ColNr IS NOT NULL THEN NULL ELSE M2.ColNr END
-,   Category = 0
-FROM ##MirrorLines2 M2
-INNER JOIN ##MirrorLines M ON M.MapNr = M2.MapNr AND (M.RowNr = M2.RowNr OR M.ColNr = M2.ColNr)
-WHERE M2.Category = 2
-
-DELETE FROM ##MirrorLines2 WHERE RowNr IS NULL AND ColNr IS NULL
-
-UPDATE ##MirrorLines2 SET Category = 0 WHERE Category = 2
 
 ;WITH cte_MirrorOverRow AS (
-    SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals
+    SELECT M1.MapNr, M1.RowNr, COUNT(1) AS NrOfMatchingVals, 'Row' AS MirrorDir
     FROM ##Maps M1
     INNER JOIN ##Maps M2 ON M1.MapNr = M2.MapNr 
                         AND M1.RowNr = M2.RowNr - 1 
@@ -174,7 +144,7 @@ UPDATE ##MirrorLines2 SET Category = 0 WHERE Category = 2
                         AND M1.Val = M2.Val
     GROUP BY M1.MapNr, M1.RowNr
 ), cte_MirrorOverCol AS (
-    SELECT M1.MapNr, M1.ColNr, COUNT(1) AS NrOfMatchingVals
+    SELECT M1.MapNr, M1.ColNr, COUNT(1) AS NrOfMatchingVals, 'Col' AS MirrorDir
     FROM ##Maps M1
     INNER JOIN ##Maps M2 ON M1.MapNr = M2.MapNr 
                         AND M1.RowNr = M2.RowNr
@@ -186,127 +156,88 @@ UPDATE ##MirrorLines2 SET Category = 0 WHERE Category = 2
     FROM ##Maps
     GROUP BY MapNr
 )
-SELECT cM.MapNr, CMOR.RowNr, CMOC.ColNr, cM.RowSize, cM.ColSize
-INTO ##MirrorLines3
+INSERT ##MirrorLines (MapNr, RowOrColNr, RowOrCol, RowSize, ColSize)
+SELECT cM.MapNr, CMOR.RowNr, CMOR.MirrorDir, cM.RowSize, cM.ColSize 
 FROM cte_Mapsize cM
-LEFT JOIN cte_MirrorOverRow CMOR ON cM.MapNr = CMOR.MapNr AND CMOR.NrOfMatchingVals = cM.ColSize - 1
-LEFT JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatchingVals = cM.RowSize - 1
-WHERE cM.MapNr IN (SELECT MapNr FROM ##MirrorLines2 WHERE Category = 1)
+INNER JOIN cte_MirrorOverRow CMOR ON cM.MapNr = CMOR.MapNr AND CMOR.NrOfMatchingVals = cM.ColSize - 1
+
+UNION 
+
+SELECT cM.MapNr, CMOC.ColNr, CMOC.MirrorDir, cM.RowSize, cM.ColSize 
+FROM cte_Mapsize cM
+INNER JOIN cte_MirrorOverCol CMOC ON cM.MapNr = CMOC.MapNr AND CMOC.NrOfMatchingVals = cM.RowSize - 1
 ORDER BY cM.MapNr
 
 
-UPDATE M2
-SET RowNr = M3.RowNr
-,   ColNr= M3.ColNr
-,   Category = 0
-FROM ##MirrorLines2 M2
-INNER JOIN ##MirrorLines3 M3 ON M2.MapNr = M3.MapNr
-WHERE M2.MapNr IN (SELECT MapNr FROM ##MirrorLines3 GROUP BY MapNr HAVING COUNT(1) = 1)
 
-DELETE FROM ##MirrorLines3 WHERE MapNr IN (SELECT MapNr FROM ##MirrorLines3 GROUP BY MapNr HAVING COUNT(1) = 1)
+;WITH cte_Rect AS (
+    SELECT ML.ID,
+           ML.MapNr,
+           ML.RowOrColNr,
+           ML.RowOrCol,
+           ML.RowSize,
+           ML.ColSize
+    ,      CASE WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 >= ML.RowOrColNr THEN 0 
+                WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 < ML.RowOrColNr THEN 2 * ML.RowOrColNr - (ML.RowSize - 1) + 1
+                ELSE 0 
+           END AS StartRowUp
+    ,      CASE WHEN RowOrCol = 'Row' THEN ML.RowOrColNr
+                ELSE RowSize 
+           END AS EndRowUp
+    ,      CASE WHEN RowOrCol = 'Row' THEN ML.RowOrColNr + 1
+                ELSE 0 
+           END AS StartRowDown
+    ,      CASE WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 >= ML.RowOrColNr THEN 2 * ML.RowOrColNr + 1
+                WHEN RowOrCol = 'Row' AND (RowSize + 1) / 2 < ML.RowOrColNr THEN ML.RowSize - 1
+                ELSE ML.RowSize 
+           END AS EndRowDown
 
-ALTER TABLE ##MirrorLines3 ADD ID INT IDENTITY(1,1)
+    ,      CASE WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 >= ML.RowOrColNr THEN 0 
+                WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 < ML.RowOrColNr THEN 2 * ML.RowOrColNr - (ML.ColSize - 1) + 1
+                ELSE 0
+           END AS StartColLeft
+    ,      CASE WHEN RowOrCol = 'Col' THEN ML.RowOrColNr
+                ELSE ColSize
+           END AS EndColLeft
+    ,      CASE WHEN RowOrCol = 'Col' THEN ML.RowOrColNr + 1
+                ELSE 0
+           END AS StartColRight
+    ,      CASE WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 >= ML.RowOrColNr THEN 2 * ML.RowOrColNr + 1
+                WHEN RowOrCol = 'Col' AND (ColSize + 1) / 2 < ML.RowOrColNr THEN ML.ColSize - 1
+                ELSE ColSize
+           END AS EndColRight
+    FROM ##MirrorLines ML
+), cte_Mirror AS (
+    SELECT c.MapNr
+    ,      c.RowOrColNr
+    ,      c.RowOrCol
+    ,      M.RowNr
+    ,      M.ColNr
+    ,      CASE WHEN c.RowOrCol = 'Col' THEN M.RowNr ELSE (2 * c.RowOrColNr + 1) - M.RowNr END AS MirrorRow
+    ,      CASE WHEN c.RowOrCol = 'Row' THEN M.ColNr ELSE (2 * c.RowOrColNr + 1) - M.ColNr END AS MirrorCol
+    ,      M.Val
+    FROM cte_Rect c
+    LEFT JOIN ##Maps M ON M.RowNr BETWEEN c.StartRowDown AND c.EndRowDown AND M.ColNr BETWEEN c.StartColRight AND c.EndColRight AND M.MapNr = c.MapNr
+), cte_Sizes AS (
+    SELECT c.MapNr
+    ,      c.RowOrColNr
+    ,      c.RowOrCol
+    ,      SUM(1) AS Size
+    ,      SUM(CASE WHEN c.Val = M.Val THEN 1 ELSE 0 END) AS MatchingSize
+    FROM cte_Mirror c
+    INNER JOIN ##Maps M ON M.MapNr = c.MapNr AND M.RowNr = c.MirrorRow AND M.ColNr = c.MirrorCol
+    GROUP BY c.MapNr, c.RowOrColNr, c.RowOrCol
+)
+SELECT SUM(CASE WHEN RowOrCol = 'Col' THEN RowOrColNr + 1 ELSE 0 END)
++      SUM(CASE WHEN RowOrCol = 'Row' THEN RowOrColNr + 1 ELSE 0 END) * 100
+FROM cte_Sizes
+WHERE Size = MatchingSize + 1
 
---DECLARE @Level INT
-SET @Level = 1
-
-WHILE (SELECT COUNT(1) FROM (SELECT MapNr, RowNr, ColNr FROM ##MirrorLines3 GROUP BY MapNr, RowNr, ColNr) S) > (SELECT COUNT(1) FROM ##MirrorLines2 WHERE Category = 1)
-BEGIN
-
---DECLARE @Level INT = 2
-
-    UPDATE ##MirrorLines3
-    SET ColNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines3 ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.ColNr = M1.ColNr + @Level AND ML.ColNr = M2.ColNr - 1 - @Level AND M1.RowNr = M2.RowNr AND M1.Val = M2.Val
-        WHERE ML.ColNr IS NOT NULL
-        GROUP BY ML.ID, ML.RowSize
-        HAVING COUNT(1) < ML.RowSize 
-    )
-
-
-    UPDATE ##MirrorLines3
-    SET RowNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines3 ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.RowNr = M1.RowNr + @Level AND ML.RowNr = M2.RowNr - 1 - @Level AND M1.ColNr = M2.ColNr AND M1.Val = M2.Val
-        WHERE ML.RowNr IS NOT NULL
-        GROUP BY ML.ID, ML.ColSize
-        HAVING COUNT(1) < ML.ColSize
-    )
-
-    DELETE FROM ##MirrorLines3
-    WHERE RowNr IS NULL AND ColNr IS NULL
-
-    PRINT @Level
-    SET @Level = @Level + 1
-        
-END
-
-UPDATE M2
-SET RowNr = M3.RowNr
-,   ColNr= M3.ColNr
-,   Category = 0
-FROM ##MirrorLines2 M2
-INNER JOIN ##MirrorLines3 M3 ON M2.MapNr = M3.MapNr
-WHERE M2.MapNr IN (SELECT MapNr FROM ##MirrorLines3 GROUP BY MapNr)
-
-
---DECLARE @Level INT = 2
-SET @Level = 3
-
-    UPDATE ##MirrorLines2
-    SET ColNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines2 ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.ColNr = M1.ColNr + @Level AND ML.ColNr = M2.ColNr - 1 - @Level AND M1.RowNr = M2.RowNr AND M1.Val = M2.Val
-        WHERE ML.ColNr IS NOT NULL AND ML.Category <> 0
-        GROUP BY ML.ID, ML.RowSize
-        HAVING COUNT(1) < ML.RowSize - 1
-    )
-
-
-    UPDATE ##MirrorLines2
-    SET RowNr = NULL
-    WHERE ID IN (
-        SELECT ML.ID
-        FROM ##MirrorLines2 ML
-        INNER JOIN ##Maps M1 ON ML.MapNr = M1.MapNr
-        INNER JOIN ##Maps M2 ON ML.MapNr = M2.MapNr AND ML.RowNr = M1.RowNr + @Level AND ML.RowNr = M2.RowNr - 1 - @Level AND M1.ColNr = M2.ColNr AND M1.Val = M2.Val
-        WHERE ML.RowNr IS NOT NULL AND ML.Category <> 0
-        GROUP BY ML.ID, ML.ColSize
-        HAVING COUNT(1) < ML.ColSize - 1
-    )
-
-    DELETE FROM ##MirrorLines2
-    WHERE RowNr IS NULL AND ColNr IS NULL
-
-    PRINT @Level
-    SET @Level = @Level + 1
-
-    
-SELECT * FROM ##MirrorLines2 WHERE Category <>0
--- 
-DELETE FROM ##MirrorLines2 WHERE ID IN (15, 26, 36, 39)
-
-
-SELECT SUM(ISNULL(RowNr+1,0)*100 + ISNULL(ColNr+1,0))
-FROM ##MirrorLines2
-
--- 30385 is too high
 
 /*
 
 DROP TABLE ##Maps
 DROP TABLE ##MirrorLines
-DROP TABLE ##MirrorLines2
-DROP TABLE ##MirrorLines3
 
 */
+
