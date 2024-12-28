@@ -15,6 +15,8 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 --SELECT TOP 10 * FROM ##InputSplit
 --SELECT TOP 10 * FROM ##InputSplitCust
 
+
+
 ;WITH cte_1 AS (
 	SELECT ROW_NUMBER() OVER (ORDER BY Piece) AS R, Piece FROM ##InputSplit WHERE PieceNr = 1 
 ), cte_2 AS (
@@ -23,6 +25,9 @@ EXEC dbo.ParseInput @year = @year, @day = @day
 SELECT SUM(ABS(CAST(c1.Piece AS INT) - CAST(c2.Piece AS INT)) ) AS Part1
 FROM cte_1 c1
 INNER JOIN cte_2 c2 ON c1.R = c2.R
+
+
+
 
 ;WITH cte_1 AS (
 	SELECT ROW_NUMBER() OVER (ORDER BY Piece) AS R, Piece FROM ##InputSplit WHERE PieceNr = 1 

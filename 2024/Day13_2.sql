@@ -1,0 +1,281 @@
+USE Test_WME
+
+SET NOCOUNT ON
+
+DECLARE @year VARCHAR(4) = '2024'
+DECLARE @day VARCHAR(2)  = '13'
+
+EXEC dbo.GetInput @year = @year, @day = @day
+EXEC dbo.ParseInput @year = @year, @day = @day, @SplitCustom = '+ =,'
+
+--SELECT TOP 10 * FROM ##Input
+--SELECT TOP 10 * FROM ##InputInts
+--SELECT TOP 10 * FROM ##InputNumbered
+--SELECT TOP 10 * FROM ##InputGrid
+--SELECT TOP 10 * FROM ##InputSplit
+--SELECT TOP 10 * FROM ##InputSplitCust
+
+
+CREATE TABLE ##XY_Factors (ID INT IDENTITY(1,1), MachineNr INT, XA FLOAT, XB FLOAT, 
+                                                        YA FLOAT, YB FLOAT, 
+                                                        TX FLOAT, TY FLOAT, 
+                                                        TX_Part2 FLOAT, TY_Part2 FLOAT, 
+                                                        Part1A INT, Part1B INT, 
+                                                        Part2A INT, Part2B INT)
+
+
+INSERT ##XY_Factors (MachineNr, XA, XB, YA, YB, TX, TY)
+SELECT MachineNr, [1] AS XA, [3] AS XB, [2] AS YA, [4] AS YB, [5] AS TX, [6] AS TY
+FROM (
+    SELECT RowNr / 4 As MachineNr
+    , ROW_NUMBER() OVER (PARTITION BY RowNr/4 ORDER BY RowNr, PieceNr) RN
+    , REPLACE(REPLACE(REPLACE(REPLACE(Piece, 'X+',''),'Y+',''),'X=',''),'Y=','') AS Val
+    FROM ##InputSplit
+    WHERE TRY_CAST(REPLACE(REPLACE(REPLACE(REPLACE(Piece, 'X+',''),'Y+',''),'X=',''),'Y=','') AS INT) IS NOT NULL
+) Src
+PIVOT (
+    MAX(Val)
+    FOR RN IN ([1],[2],[3],[4],[5],[6])
+) pvt
+
+
+/*
+ XA * A + XB * B = TX <=> A + XB/XA * B = TX/XA <=> A = TX/XA - XB/XA *B
+ YA * A + YB * B = TY
+ ==> YA(TX/XA - XB/XA*B) + YB*B = TY
+ <==> B (YB - (YA*XB)/XA) = TY - (YA*TX)/XA
+
+*/
+
+UPDATE ##XY_Factors
+SET TX = TX + 10000000000000
+,   TY = TY + 10000000000000
+            
+
+
+SELECT *
+INTO ##XY_FactorsBackup
+FROM ##XY_Factors
+
+
+
+
+UPDATE ##XY_Factors
+SET XA = XA / XA
+,   XB = XB / XA
+,   TX = TX / XA
+
+UPDATE ##XY_Factors
+SET YA = YA - XA * YA
+,   YB = YB - XB * YA
+,   TY = TY - TX * YA
+
+UPDATE ##XY_Factors
+SET YB = YB / YB
+,   TY = TY / YB
+
+UPDATE ##XY_Factors
+SET XB = XB - YB * XB
+,   TX = TX - TY * XB
+
+
+
+SELECT --F.MachineNr, F.TX AS A, F.TY AS B 
+SUM(3*ROUND(F.TX,0) + ROUND(F.TY,0)) AS Part1
+FROM ##XY_Factors F
+INNER JOIN ##XY_FactorsBackup FB ON F.MachineNr = FB.MachineNr
+WHERE ROUND(F.TX,0) * FB.XA + ROUND(F.TY,0) * FB.XB = FB.TX
+  AND ROUND(F.TX,0) * FB.YA + ROUND(F.TY,0) * FB.YB = FB.TY
+
+/*
+
+DROP TABLE ##XY_Factors
+DROP TABLE ##XY_FactorsBackup
+
+--78101482023732 is correct for part 2
+
+
+MachineNr	A	B
+1	22	40
+2	76	74
+6	43	26
+9	95	99
+11	62	6
+14	36	69
+15	43	44
+17	34	7
+19	49	79
+20	18	7
+22	10	67
+24	65	79
+25	66	80
+26	55	70
+27	59.0000000000001	89
+28	53	66
+31	80	98
+32	53	19
+34	65	25
+36	7	85
+37	84	51
+43	74	47
+44	85	75
+45	51	5.99999999999999
+47	6	25
+48	63	48
+49	57	37
+50	28	81
+51	40	86
+53	69	33
+54	78	78
+56	50	26
+57	69	29
+58	25	91
+59	94	37
+61	27	21
+62	38	17
+63	7	92
+66	22	39
+70	23	79
+71	61	18
+72	70.0000000000001	69
+73	48.9999999999999	99
+74	59	17
+76	30	62
+80	24	57
+84	17	89
+85	42	25
+86	53	87
+89	18	49
+91	28	77
+92	62	33
+94	18	5
+95	8	27
+96	88	65
+97	67	33
+99	51	37
+100	67	40
+101	73	11
+102	82	46
+103	10	4
+105	90	21
+106	25	52
+108	9	54
+110	16	83
+113	96	22
+114	29	23
+115	32	66
+116	26	91
+117	55	13
+118	97	50
+121	66	47
+124	37	87
+125	86	18
+126	57	89
+130	61	67
+135	59	67
+136	26	46
+137	71	69
+138	64.9999999999999	80
+140	77	6
+144	31	63
+145	44	30
+146	37	97
+148	45	68
+150	49	7
+154	76	47
+155	92	45
+156	24	4
+158	8.00000000000001	22
+159	8.00000000000001	60
+161	99	44
+162	10	45
+164	79	8
+168	56	5
+169	35	58
+173	77	63
+176	50	60
+177	89	8
+178	18	26
+179	48	59
+185	23	82
+186	14	21
+187	9.00000000000001	15
+189	11	58
+190	22	43
+191	45	70
+194	28	56
+195	25	64
+197	95	90
+200	36	11
+201	62	97
+204	30	56
+205	99	52
+207	92	33
+208	93	48
+209	4	49
+211	55	54
+214	78	85
+219	10	27
+222	87	20
+223	54	40
+226	41	42
+227	85	31
+228	87	25
+229	47	19
+230	29	70
+231	77	60
+234	40	37
+235	85	48
+236	48	18
+238	90.0000000000001	72
+240	75	26
+241	84	89
+242	40	5
+248	83.9999999999999	57
+250	99	26
+251	86	92
+255	96	59
+256	63	42
+258	78	70
+259	84	13
+260	18	21
+261	26	29
+262	79	18
+264	70	68
+265	9	47
+266	19	6
+267	65	83
+268	43	44
+269	78	81
+271	36	39
+272	35	63
+275	16	96
+279	31	34
+282	45	66
+283	78	40
+284	80	77
+286	72	5
+288	66	77
+289	78	7
+291	43	54
+292	14	37
+293	38	70
+295	61	24
+296	17	68
+297	91	52
+298	16	82
+299	27	30
+301	59	33
+304	98	2.99999999999999
+305	5	19
+307	99	8.99999999999999
+308	35	74
+309	96	33
+310	39	5
+311	6	11
+313	14	64
+314	78	83
+315	82	97
+316	29	96
+318	71	11
+*/
